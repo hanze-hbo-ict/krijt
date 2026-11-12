@@ -1,6 +1,6 @@
 /** Milestone 2 commands: attribute editing, notation flags, ordering, move, copy, delete. */
 import { describe, expect, it } from 'vitest'
-import { applyCommand, orderAttributeIds, SPLIT_REFERENCE_ERROR, type Command } from '../../src/commands/commands'
+import { applyCommand, orderAttributeIds, type Command } from '../../src/commands/commands'
 import { copyAttributes, moveAttributes } from '../../src/commands/builders'
 import { emptyDocument, newAttribute, type KrijtDocument, type Reference, type Relation } from '../../src/model/types'
 import { integrityProblem } from '../../src/model/validate'
@@ -135,10 +135,14 @@ describe('move', () => {
     expect(d.references[0]!.to).toEqual({ relationId: 'A', attributeIds: ['A.id', 'A.x'] })
   })
 
-  it('refuses to split a reference end across two tables, leaving the document unchanged', () => {
+  it('moves a whole reference end when one member moves, and says so', () => {
     const doc = docWith([rel('A', ['id', 'x']), rel('B', ['fk1', 'fk2'], 100)], [ref('R', ['B', ['B.fk1', 'B.fk2']], ['A', ['A.id', 'A.x']])])
     const r = applyCommand(doc, { type: 'moveAttributes', attributeIds: ['B.fk1'], destination: { kind: 'newTable', relationId: 'N', position: { x: 0, y: 0 } } })
-    expect(r).toEqual({ ok: false, error: SPLIT_REFERENCE_ERROR })
+    if (!r.ok) throw new Error(r.error)
+    expect(r.doc.relations.map((x) => x.id)).toEqual(['A', 'N'])
+    expect(r.doc.relations[1]!.attributes.map((a) => a.id)).toEqual(['B.fk1', 'B.fk2'])
+    expect(r.doc.references[0]!.from).toEqual({ relationId: 'N', attributeIds: ['B.fk1', 'B.fk2'] })
+    expect(r.notice).toMatch(/Moved fk2 along, to keep the reference together\. 1 empty table removed\./)
   })
 
   it('rejects missing attributes and destinations', () => {

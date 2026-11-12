@@ -15,3 +15,4 @@ export function randomId(prefix: string, length = 10): string {
 export const newFieldId = () => randomId('f')
 export const newRelationId = () => randomId('r')
 export const newAttributeId = () => randomId('a')
+export const newReferenceId = () => randomId('k')

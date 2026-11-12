@@ -7,6 +7,7 @@ import { createCanvasMeasurer } from '../geometry/measure'
 import { Sidebar } from '../inventory/Sidebar'
 import { loadSession, safeSessionStorage, SAVE_DEBOUNCE_MS, saveSession } from '../persistence/session'
 import { initialState, reducer, selectedAttributeIds, SIDEBAR_MAX, SIDEBAR_MIN, type AppState } from '../state/appState'
+import { nextStepAction } from '../state/interaction'
 import { ContextBar, MessageBanner, ToolStrip } from './ContextBar'
 import { HelpDialog } from './HelpDialog'
 import { IS_MAC, MOD_KEY } from './platform'
@@ -72,9 +73,10 @@ export function App() {
       const op = s.ui.operation
       const attrs = selectedAttributeIds(s.ui)
       if (e.key === 'Enter') {
-        if ((op.kind === 'move' || op.kind === 'copy') && op.phase === 'selecting') {
+        const step = nextStepAction(s)
+        if (step) {
           e.preventDefault()
-          dispatch({ type: 'next' })
+          dispatch(step)
         } else if (op.kind === 'select' && attrs.length === 1) {
           e.preventDefault()
           dispatch({ type: 'ui', patch: { editing: { kind: 'attributeName', attributeId: attrs[0]! } } })
@@ -85,6 +87,11 @@ export function App() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && attrs.length > 0) {
         e.preventDefault()
         dispatch({ type: 'command', command: { type: 'deleteAttributes', attributeIds: attrs } })
+        return
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && s.ui.selection.kind === 'reference') {
+        e.preventDefault()
+        dispatch({ type: 'command', command: { type: 'deleteReference', referenceId: s.ui.selection.referenceId } })
         return
       }
       const arrows: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }

@@ -3,9 +3,9 @@
  * Click paths, keyboard activation and drag-and-drop all go through these.
  */
 import { orderAttributeIds, type Command, type Destination } from './commands'
-import type { Id, KrijtDocument, Point } from '../model/types'
+import type { Id, KrijtDocument, Point, ReferenceEnd } from '../model/types'
 import { newAttribute } from '../model/types'
-import { newAttributeId, newFieldId, newRelationId } from '../model/ids'
+import { newAttributeId, newFieldId, newReferenceId, newRelationId } from '../model/ids'
 
 /** A destination chosen by the student, before any new table ID exists. */
 export type DestinationIntent = { kind: 'table'; relationId: Id; index?: number } | { kind: 'newTable'; position: Point }
@@ -76,4 +76,9 @@ export function copyAttributes(doc: KrijtDocument, attributeIds: Id[], destinati
   if (ordered.length === 0) return null
   const newIds = ordered.map(() => newAttributeId())
   return { command: { type: 'copyAttributes', attributeIds: ordered, newIds, destination }, newIds }
+}
+
+/** A reference between two ends, each in the order the student clicked. */
+export function addReference(from: ReferenceEnd, to: ReferenceEnd): Command {
+  return { type: 'addReference', reference: { id: newReferenceId(), from, to } }
 }

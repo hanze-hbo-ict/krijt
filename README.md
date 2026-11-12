@@ -1,14 +1,14 @@
 # Krijt
 
 **A lightweight, browser-only editor for _strokendiagrammen_** (Dutch strip diagrams) in database normalization exercises.
-Students list the fields of an original form, place them into horizontal table strips, and arrange the diagram.
+Students list the fields of an original form, place them into horizontal table strips, draw references, and arrange the diagram.
 Krijt is an expression tool, not a normalization tutor: it never proposes tables, keys or normal forms, and never grades.
 
 It is in the same family as [Kopje](https://kopje.pages.dev) and Krash and takes its styling from Krash's design tokens
 (`src/styles/tokens.css`). There is no backend, no account, no telemetry and no network access at runtime.
 
-The product specification is [PLAN.md](PLAN.md). **Status: Milestone 2** (attribute manipulation, notation, Move/Copy,
-undo/redo). References (M3) and clipboard export (M4) are not built yet.
+The product specification is [PLAN.md](PLAN.md). **Status: Milestone 3** (references: single and composite
+foreign keys with braces, orthogonal connectors that follow their cells). Clipboard export (M4) is not built yet.
 
 ## Quick start
 
@@ -68,6 +68,31 @@ operation needs a modifier key.
   removed. Dragging a cell (or a selection) moves it, through the same command.
 - Typed attributes: the dashed **+** cell after a strip, or **Add attribute**.
 
+**References**
+
+- **Reference** tool (or **Reference from…** for the selected attributes): click the foreign-key attribute(s), all in
+  one table and side by side, **Next** (Enter), then click the referenced attribute(s), side by side in one table and
+  as many, **Finish** (Enter). The ends pair up **left to right in table order** (click order does not matter, and the
+  ends are stored in table order); composite ends show numbered badges. **Back** returns to step 1; Escape/Cancel
+  changes nothing. Impossible picks (a second table, ends not side by side, too many targets, a foreign-key attribute
+  as its own target) are refused with a message. Nothing checks keys or names: a target need not be a primary key.
+- **Ends are units.** ← → on a whole composite end shift it as one block, and other attributes jump over it. ← → on
+  part of an end reorder inside it (which changes the left-to-right pairing, as the diagram shows); once the part
+  reaches the end's edge, the next press moves the whole block. A reorder that would separate overlapping ends moves
+  the block instead.
+  Moving one member (Move, Move to…, or a drag) brings the rest of the end along, with a message, and selects it all.
+  Placing, copying or moving to a point inside an end snaps to the block's nearer edge (after it on a tie); the
+  preview shows the snapped spot. Overlapping ends in one table form one block.
+- **Rendering**: one attribute per end gives a plain orthogonal arrow from the foreign key to the referenced cell; a
+  composite reference gets a curly brace at **both** ends and one arrow between the brace tips. (A brace that spans
+  non-member cells, possible only in sessions from before ends became units, marks its members with dots.)
+- **Selecting** a connector (click it, or Enter on it with the keyboard) highlights both ends (dashed amber: foreign
+  key; solid teal: referenced) and offers **Delete reference** (also Del). Connectors have a 14px invisible hit
+  stroke and win over tables underneath; while any operation runs they are click-through.
+- Connectors follow their cells by attribute ID when tables move (also during a drag), attributes are reordered,
+  renamed or moved together to another table. Deleting an attribute or table deletes its references in the same undo
+  step, with a message.
+
 **Tables**: click the header band to select; **Name table / Rename table** (empty = unnamed), **Add attribute**, **Move
 table** (then click), **Select all attributes**, **Delete table**. Tables also move by dragging the header band or with
 the arrow keys.
@@ -82,6 +107,19 @@ and refused operations appear over the top of the canvas.
 
 **Canvas and recovery**: scroll to pan, pinch to zoom, zoom buttons, 100% and Fit. The document, viewport and sidebar
 width are saved to `sessionStorage` and restored on reload in the same tab; corrupt data starts an empty diagram.
+
+### Demo scenario (Milestone 3 acceptance)
+
+1. Paste `ordernr, klantnr, naam, regelnr, aantal, levnr` (one per line) and place four tables: Order
+   (`ordernr, klantnr`), Klant (`klantnr, naam`), Regel (`ordernr, regelnr, aantal`), Levering (`ordernr, regelnr, levnr`).
+2. **Reference**, click Order's `klantnr`, **Next**, click Klant's `klantnr`, **Finish**: one arrow.
+3. **Select several**, click Levering's `ordernr` and `regelnr`, **Reference from…**, click Regel's `ordernr` and
+   `regelnr`, Enter: braces at both ends, one arrow.
+4. Move Klant and Regel (**Move table** + click), reorder attributes with ← →, undo: both references stay attached at
+   every step, and survive a reload.
+
+Automated in `tests/unit/references.test.ts` and `tests/e2e/milestone3.spec.ts`, which checks from the rendered SVG
+which cells each connector end touches.
 
 ### Demo scenario (Milestone 2 acceptance)
 
@@ -103,15 +141,16 @@ src/
   model/        types.ts (KrijtDocument), ids.ts (stable random IDs), validate.ts (structural checks of untrusted data)
   commands/     commands.ts (pure applyCommand), builders.ts (intent → command, generates IDs; field-list parsing)
   state/        appState.ts (reducer, UI state machine, history), interaction.ts (click/drop → action, destinations)
-  geometry/     layout.ts (strip layout, notation widths, bounds), measure.ts (canvas text measurer), viewport.ts
-  canvas/       Canvas.tsx (SVG, hit testing, previews, pan/zoom, drags, inline editors), RelationView.tsx (one strip)
+  geometry/     layout.ts (strip layout, notation widths, bounds), references.ts (connectors, braces), measure.ts, viewport.ts
+  canvas/       Canvas.tsx (SVG, hit testing, previews, pan/zoom, drags, inline editors), RelationView.tsx (one strip),
+                ReferenceView.tsx (one connector)
   inventory/    Sidebar.tsx (form fields, field drag source)
   persistence/  session.ts (versioned sessionStorage)
   components/   Icon, Splitter, InlineInput
   app/          App.tsx (shell, shortcuts), ContextBar.tsx (tools, context bar, messages), HelpDialog.tsx
 tests/
-  unit/         commands, attributes, geometry, state machine, operations + history, session recovery
-  e2e/          Playwright workflows (app.spec.ts: M1, milestone2.spec.ts: M2)
+  unit/         commands, attributes, geometry, state machine, operations + history, references, session recovery
+  e2e/          Playwright workflows (app.spec.ts: M1, milestone2.spec.ts: M2, milestone3.spec.ts: M3)
 ```
 
 **Document.** `KrijtDocument` (`src/model/types.ts`) is the plan's model, unchanged, and the single source of truth.
@@ -130,7 +169,9 @@ drops. `destinationFor(doc, target, point)` turns a hit target into a destinatio
 hit. The preview renders from the same function, so what you see is where things go.
 
 **State and history.** One `useReducer` holds `{ doc, ui, history }`. `ui.operation` is the state machine: `select`,
-`place`, `moveTable`, `move.{selecting,destination}`, `copy.{selecting,destination}`. One-shot operations return to
+`place`, `moveTable`, `move.{selecting,destination}`, `copy.{selecting,destination}`, and
+`reference.{source,target}`, which carries both ordered attribute lists itself. Finishing a reference needs a fresh ID,
+so `nextStepAction(state)` resolves Next/Finish/Enter for every operation outside the reducer. One-shot operations return to
 `select`; Cancel/Escape changes UI state only. History keeps up to 200 previous documents; a successful command that
 changes the document pushes one entry (or merges with the previous entry for the same `coalesceKey`), and an unchanged
 or failed command pushes nothing. Undo/redo end any running operation and `reconcileUi` drops selections that no longer
@@ -143,7 +184,12 @@ fixed size and messages float over the canvas, so selecting something never move
 
 **Geometry.** `layoutRelation` computes cell boxes, the header band and the editor-only + cell from a `TextMeasurer`.
 The browser uses a cached canvas measurer with the diagram font; tests use a deterministic estimate.
-`contentBounds(doc, m, editor)` covers editor affordances or only exported content.
+`contentBounds(doc, m, editor)` covers editor affordances or only exported content, and always includes connectors and
+braces. `layoutReferences(references, layouts)` derives each connector from the current strip layouts: target clearly
+below → bottom edge to top edge; clearly above → top to bottom; otherwise (side by side, or one table) → both bottom,
+with the horizontal run underneath. Horizontal runs that would lie on top of an earlier one shift by a 10px lane.
+Commands `addReference` and `deleteReference` check structure only (`referenceProblem`): ends exist, one table each,
+no repeats, equal size, no attribute referring to itself, no exact duplicate.
 
 **Security and offline.** All assets are bundled; the production build carries a strict CSP (`vite.config.ts`,
 `public/_headers`) that only allows the app's own origin. User text is rendered as text (React/SVG), never as HTML. An
@@ -151,9 +197,11 @@ E2E hook fails any test that triggers a request to another host.
 
 ## Deviations from the plan and decisions
 
-- **Moving a reference end apart is refused** (plan §4.3 asks for a documented rule): if a move would leave some
-  attributes of a reference end in one table and some in another, nothing changes and the student is told to move them
-  together or delete the reference. An end that moves completely follows to the destination table.
+- **Reference ends are adjacent, ordered units** (plan §4.3 asks for a documented rule; this follows the course
+  convention and deliberately narrows plan §2, which allowed non-adjacent ends). Ends must be side by side when the
+  reference is made, pair up left to right, and every edit keeps them that way: shifting reorders inside the end or
+  moves the block, moving a member brings the whole end, insertions snap out of it. A reference end that moves follows to the destination table.
+  Not expressible: overlapping composite keys such as (a,b), (a,c), (b,c) in one table.
 - **Two entry points for Move/Copy.** The plan wants both "selection → command" and "command → selection". The tool
   strip starts with an empty selection; **Move to… / Copy to…** use the current selection and skip straight to the
   destination. Carrying an old selection into the tool proved easy to miss (attributes moved that the student had only
@@ -173,15 +221,21 @@ E2E hook fails any test that triggers a request to another host.
   (optional in the plan); selection and the active operation are not restored on reload; dark mode keeps cells as light
   "paper"; the UI is English with Dutch subtitles; Krash's tokens and base styles are reused.
 
-## Risks and open points for Milestone 3
+- **References (M3)**: the tool starts empty and **Reference from…** uses the selection, as with Move/Copy. A reference
+  within one table is allowed (structure only); an attribute referring to itself and an exact duplicate are not.
+  Deleting an attribute that belongs to a composite end removes the whole reference (§4.7 "removes or handles").
+  Editing a reference's ends is not offered; delete and redraw.
+- **Key hints in filled buttons** (Next/Finish) were unreadable (white on the light key background); fixed for M2's
+  Next as well.
 
-- **References UI**: the Reference mode fits the existing two-phase pattern (`selecting` → `destination` becomes
-  source → target). Selection order is already kept in click order, which the plan needs for endpoint order.
-- **Deleting with references** already removes dangling references and says so; it is tested at command level with
-  hand-made references, but not yet through the UI.
-- **Connector hit areas** must win over cells and headers underneath (§4.7), and the canvas currently resolves targets
-  from `data-kind` attributes; connectors need their own kind and a wide invisible stroke.
-- **Bounds**: `contentBounds` covers strips and headers only; braces and connectors must join it for Fit and export.
+## Risks and open points for Milestone 4
+
+- **Routing is per reference** and ignores other tables: a connector can cross an unrelated table or its header band
+  (it then wins clicks there; the header's grip end stays clickable), and an end on a strip's top edge sits in the
+  header band, where a brace can overlap the grip or the start of a long table name. Students can rearrange tables;
+  better routing is a Milestone 5 item if real diagrams need it.
+- **Export** must draw connectors in diagram ink on white (on screen they use `--diagram-connector`, light in dark
+  mode) and skip the selection halo and end marks.
 - **Text measurement**: widths come from canvas `measureText` with the system font stack (no bundled font). On-screen and
   PNG output share the measurer, but the font differs per OS, so exports will vary slightly between machines. Bundling a
   font would make output identical; decide before Milestone 4.

@@ -149,18 +149,18 @@ describe('move and copy modes', () => {
     }
   })
 
-  it('a refused move keeps the operation open with an explanation', () => {
-    let s = withTable(['a', 'b'])
+  it('moving one member of a composite reference end moves and selects the whole end', () => {
+    let s = withTable(['a', 'b', 'c', 'd'])
     const r = s.doc.relations[0]!
-    const [a, b] = r.attributes
-    s = { ...s, doc: { ...s.doc, references: [{ id: 'R', from: { relationId: r.id, attributeIds: [a!.id, b!.id] }, to: { relationId: r.id, attributeIds: [b!.id, a!.id] } }] } }
+    const [a, b, c, d] = r.attributes.map((x) => x.id)
+    s = { ...s, doc: { ...s.doc, references: [{ id: 'R', from: { relationId: r.id, attributeIds: [a!, b!] }, to: { relationId: r.id, attributeIds: [c!, d!] } }] } }
     s = run(s, { type: 'startAttributes', kind: 'move' })
     s = click(s, cellOf(s, 'a'))
     s = run(s, { type: 'next' })
-    s = click(s, EMPTY)
-    expect(s.doc.relations).toHaveLength(1)
-    expect(s.ui.message?.kind).toBe('error')
-    expect(s.ui.operation).toEqual({ kind: 'move', phase: 'destination' })
+    s = click(s, EMPTY, { x: 0, y: 300 })
+    expect(attrNames(s)).toEqual([['c', 'd'], ['a', 'b']])
+    expect(s.ui.selection).toEqual({ kind: 'attributes', attributeIds: [a, b] })
+    expect(s.ui.message?.text).toMatch(/Moved b along/)
   })
 
   it('copy selects the new copies afterwards; move keeps the moved attributes selected', () => {

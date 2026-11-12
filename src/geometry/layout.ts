@@ -6,6 +6,7 @@
  * layout feeds the on-screen canvas and, later, the PNG export renderer.
  */
 import type { Attribute, Id, KrijtDocument, Relation } from '../model/types'
+import { layoutReferences } from './references'
 
 export interface TextMeasurer {
   /** Width in diagram units of `text` at the given style. */
@@ -133,12 +134,14 @@ export function unionRects(rects: Rect[]): Rect | null {
 /**
  * Bounds of everything drawn for the diagram. `editor` includes editor-only
  * affordances (header band, "+" cell); without it only what an export shows.
- * Connectors and braces join these bounds in Milestone 3.
+ * Connectors and braces are always included.
  */
 export function contentBounds(doc: KrijtDocument, m: TextMeasurer, editor = true): Rect | null {
   const rects: Rect[] = []
+  const layouts = new Map<Id, RelationLayout>()
   for (const r of doc.relations) {
     const l = layoutRelation(r, m)
+    layouts.set(r.id, l)
     rects.push({ x: l.x, y: l.y, width: l.stripWidth, height: l.height })
     if (editor) {
       rects.push(l.header, l.addCell)
@@ -146,6 +149,7 @@ export function contentBounds(doc: KrijtDocument, m: TextMeasurer, editor = true
       rects.push({ ...l.header, width: Math.ceil(m.width(r.name, 'label')) + 2 * METRICS.cellPaddingX })
     }
   }
+  for (const g of layoutReferences(doc.references, layouts)) rects.push(g.bounds)
   return unionRects(rects)
 }
 

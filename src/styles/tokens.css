@@ -47,6 +47,7 @@
   --diagram-ink: #111827;
   --diagram-handle: #eef1f6;
   --diagram-grid: #d3d9e3;
+  --diagram-connector: #111827;
 
   --radius-s: 6px;
   --radius-m: 8px;
@@ -100,6 +101,7 @@
     --diagram-ink: #111827;
     --diagram-handle: #2a3546;
     --diagram-grid: #2c3747;
+    --diagram-connector: #d5dce8;
   }
 }
 
@@ -139,4 +141,5 @@
   --diagram-ink: #111827;
   --diagram-handle: #2a3546;
   --diagram-grid: #2c3747;
+  --diagram-connector: #d5dce8;
 }

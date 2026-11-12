@@ -4,8 +4,11 @@
  * data-relation / data-attribute; the Canvas resolves clicks from those.
  */
 import { memo } from 'react'
-import type { Attribute, Relation } from '../model/types'
+import type { Attribute, Id, Relation } from '../model/types'
 import { labelParts, labelWidth, METRICS, type RelationLayout, type TextMeasurer } from '../geometry/layout'
+
+/** A cell's part in a reference being created or selected; `index` numbers composite ends (1-based). */
+export type CellMark = { role: 'source' | 'target'; index?: number }
 
 interface Props {
   relation: Relation
@@ -18,6 +21,8 @@ interface Props {
   /** A destination is being chosen: the whole table is a destination. */
   destination: boolean
   dragging: boolean
+  /** Cells that belong to the reference being created or the selected reference. */
+  marks?: ReadonlyMap<Id, CellMark>
 }
 
 export function relationLabel(r: Relation): string {
@@ -58,6 +63,7 @@ export const RelationView = memo(function RelationView({
   draggedAttributeIds,
   destination,
   dragging,
+  marks,
 }: Props) {
   const { header, cells } = layout
   const textY = layout.y + METRICS.cellHeight / 2 + METRICS.fontSize * 0.35
@@ -122,7 +128,9 @@ export const RelationView = memo(function RelationView({
       {relation.attributes.map((a, i) => {
         const c = cells[i]!
         const isSel = selectedAttributeIds.has(a.id)
+        const mark = marks?.get(a.id)
         const w = labelWidth(labelParts(a), measurer)
+        const role = mark ? (mark.role === 'source' ? 'foreign key' : 'referenced') : null
         return (
           <g
             key={a.id}
@@ -132,10 +140,12 @@ export const RelationView = memo(function RelationView({
             data-attribute={a.id}
             data-selected={isSel || undefined}
             data-dragged={draggedAttributeIds.has(a.id) || undefined}
+            data-ref-role={mark?.role}
             role="button"
             tabIndex={0}
-            aria-pressed={isSel}
+            aria-pressed={isSel || mark !== undefined}
             aria-label={`Attribute ${a.name || '(no name)'} in ${where}`}
+            aria-description={role ? (mark?.index ? `${role} ${mark.index}` : role) : undefined}
           >
             <rect className="cell-box" x={c.x} y={layout.y} width={c.width} height={layout.height} />
             <AttributeText attribute={a} x={c.x + (c.width - w) / 2} y={textY} measurer={measurer} />
@@ -144,6 +154,19 @@ export const RelationView = memo(function RelationView({
                 <rect className="cell-selection" x={c.x + 2.5} y={layout.y + 2.5} width={c.width - 5} height={layout.height - 5} />
                 {/* A corner tick, so selection is not shown by colour alone. */}
                 <path className="cell-tick" d={`M${c.x + 2.5} ${layout.y + 11}V${layout.y + 2.5}H${c.x + 11}Z`} />
+              </>
+            )}
+            {mark && (
+              <>
+                <rect className="cell-ref-mark" x={c.x + 2.5} y={layout.y + 2.5} width={c.width - 5} height={layout.height - 5} />
+                {mark.index !== undefined && (
+                  <g className="cell-ref-badge" aria-hidden="true">
+                    <circle cx={c.x + c.width - 6} cy={layout.y + 6} r={5.5} />
+                    <text x={c.x + c.width - 6} y={layout.y + 9}>
+                      {mark.index}
+                    </text>
+                  </g>
+                )}
               </>
             )}
           </g>

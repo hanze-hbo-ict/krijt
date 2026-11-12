@@ -9,7 +9,7 @@
  * The reducer is pure. Anything that needs fresh IDs (building commands) is
  * resolved before dispatch, in interaction.ts.
  */
-import { applyCommand, type Command } from '../commands/commands'
+import { applyCommand, isContiguous, REFERENCE_ADJACENT_ERROR, type Command } from '../commands/commands'
 import type { Id, KrijtDocument } from '../model/types'
 import { emptyDocument } from '../model/types'
 import { DEFAULT_VIEWPORT, type Viewport } from '../geometry/viewport'
@@ -19,6 +19,7 @@ export type Selection =
   | { kind: 'relation'; relationId: Id }
   /** Attributes in click order, possibly from several tables. */
   | { kind: 'attributes'; attributeIds: Id[] }
+  | { kind: 'reference'; referenceId: Id }
 
 export type Phase = 'selecting' | 'destination'
 
@@ -32,6 +33,14 @@ export type Operation =
   | { kind: 'move'; phase: Phase }
   /** Copy attributes: as Move, but the originals stay and copies get new IDs. */
   | { kind: 'copy'; phase: Phase }
+  /**
+   * Create a reference: click the foreign-key attributes (side by side in one table), Next, click the referenced
+   * attributes (side by side in one table, same number), Finish. Lists are in click order while picking; the
+   * reference pairs them left to right in table order.
+   */
+  | { kind: 'reference'; phase: ReferencePhase; source: Id[]; target: Id[] }
+
+export type ReferencePhase = 'source' | 'target'
 
 export type Editing =
   | null
@@ -102,8 +111,17 @@ export type Action =
    * From the selection's "Move to… / Copy to…" it uses the current selection and goes straight to the destination.
    */
   | { type: 'startAttributes'; kind: 'move' | 'copy'; fromSelection?: boolean }
-  /** Move/Copy: finish selecting and choose a destination. */
+  /** Move/Copy: finish selecting and choose a destination. Reference: finish the foreign key, choose referenced attributes. */
   | { type: 'next' }
+  /** Reference: back from the referenced attributes to the foreign key. */
+  | { type: 'back' }
+  /**
+   * Start Reference. From the tool strip it starts empty; from the selection's "Reference from…" the selected
+   * attributes become the foreign key and, if they lie in one table, it goes straight to step 2.
+   */
+  | { type: 'startReference'; fromSelection?: boolean }
+  /** Reference: a click on a cell adds it to (or removes it from) the end being chosen. */
+  | { type: 'pickReferenceAttribute'; attributeId: Id }
   /** Escape / Cancel: close an edit, end the operation, or clear the selection. */
   | { type: 'cancel' }
   | { type: 'undo' }
@@ -116,6 +134,29 @@ export function selectedAttributeIds(ui: UiState): Id[] {
 }
 
 export const NO_ATTRIBUTES_MESSAGE = 'Select one or more attributes first.'
+export const NO_SOURCE_MESSAGE = 'Click the foreign-key attributes first.'
+export const SOURCE_ONE_TABLE_MESSAGE =
+  'The foreign-key attributes must all be in one table. Click a selected cell to remove it, or Cancel to start again.'
+export const TARGET_ONE_TABLE_MESSAGE =
+  'The referenced attributes must all be in one table. Click a selected cell to remove it, or Back to change the foreign key.'
+export const TARGET_IS_SOURCE_MESSAGE = 'That attribute is part of the foreign key. Click the attributes it refers to.'
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/** The table that owns each attribute. */
+export function attributeOwners(doc: KrijtDocument): Map<Id, Id> {
+  const owner = new Map<Id, Id>()
+  for (const r of doc.relations) for (const a of r.attributes) owner.set(a.id, r.id)
+  return owner
+}
+
+/** The single table holding all of `ids`, or null if they span several (or none). */
+export function commonRelation(doc: KrijtDocument, ids: Id[]): Id | null {
+  const owner = attributeOwners(doc)
+  const tables = new Set(ids.map((id) => owner.get(id)))
+  if (tables.size !== 1) return null
+  return [...tables][0] ?? null
+}
 
 /** Drops UI references to things the document no longer has. */
 export function reconcileUi(doc: KrijtDocument, ui: UiState): UiState {
@@ -128,7 +169,17 @@ export function reconcileUi(doc: KrijtDocument, ui: UiState): UiState {
     const kept = selection.attributeIds.filter((id) => attributeIds.has(id))
     if (kept.length !== selection.attributeIds.length) selection = kept.length ? { kind: 'attributes', attributeIds: kept } : NO_SELECTION
   }
+  if (selection.kind === 'reference') {
+    const id = selection.referenceId
+    if (!doc.references.some((r) => r.id === id)) selection = NO_SELECTION
+  }
   if (operation.kind === 'moveTable' && !relationIds.has(operation.relationId)) operation = SELECT
+  if (operation.kind === 'reference') {
+    const source = operation.source.filter((id) => attributeIds.has(id))
+    const target = operation.target.filter((id) => attributeIds.has(id))
+    if (source.length !== operation.source.length || target.length !== operation.target.length)
+      operation = { ...operation, source, target, phase: source.length ? operation.phase : 'source' }
+  }
   if ((operation.kind === 'move' || operation.kind === 'copy') && operation.phase === 'destination' && selection.kind !== 'attributes')
     operation = { ...operation, phase: 'selecting' }
   if (editing) {
@@ -211,8 +262,64 @@ export function reducer(state: AppState, action: Action): AppState {
         },
       }
     }
+    case 'startReference': {
+      const sel = selectedAttributeIds(state.ui)
+      const source = action.fromSelection === true ? sel : []
+      const oneTable = source.length > 0 && commonRelation(state.doc, source) !== null
+      const adjacent = oneTable && isContiguous(state.doc, source)
+      const message: Message | null =
+        source.length === 0 ? null : !oneTable ? { kind: 'error', text: SOURCE_ONE_TABLE_MESSAGE } : !adjacent ? { kind: 'error', text: REFERENCE_ADJACENT_ERROR } : null
+      return {
+        ...state,
+        ui: {
+          ...state.ui,
+          operation: { kind: 'reference', phase: adjacent ? 'target' : 'source', source, target: [] },
+          selection: NO_SELECTION,
+          editing: null,
+          message,
+        },
+      }
+    }
+    case 'pickReferenceAttribute': {
+      const op = state.ui.operation
+      if (op.kind !== 'reference') return state
+      const owner = attributeOwners(state.doc)
+      const table = owner.get(action.attributeId)
+      if (!table) return state
+      const error = (text: string): AppState => ({ ...state, ui: { ...state.ui, message: { kind: 'error', text } } })
+      const list = op.phase === 'source' ? op.source : op.target
+      if (list.includes(action.attributeId)) {
+        const next = list.filter((id) => id !== action.attributeId)
+        const operation: Operation = op.phase === 'source' ? { ...op, source: next } : { ...op, target: next }
+        return { ...state, ui: { ...state.ui, operation, message: null } }
+      }
+      if (op.phase === 'source') {
+        if (op.source.length > 0 && owner.get(op.source[0]!) !== table) return error(SOURCE_ONE_TABLE_MESSAGE)
+        return { ...state, ui: { ...state.ui, operation: { ...op, source: [...op.source, action.attributeId] }, message: null } }
+      }
+      if (op.source.includes(action.attributeId)) return error(TARGET_IS_SOURCE_MESSAGE)
+      if (op.target.length > 0 && owner.get(op.target[0]!) !== table) return error(TARGET_ONE_TABLE_MESSAGE)
+      if (op.target.length >= op.source.length)
+        return error(
+          `The foreign key has ${plural(op.source.length, 'attribute')}, and ${op.source.length === 1 ? 'it is' : 'all are'} matched. Click a selected cell to remove it, or choose Finish.`,
+        )
+      return { ...state, ui: { ...state.ui, operation: { ...op, target: [...op.target, action.attributeId] }, message: null } }
+    }
+    case 'back': {
+      const op = state.ui.operation
+      if (op.kind !== 'reference' || op.phase !== 'target') return state
+      return { ...state, ui: { ...state.ui, operation: { ...op, phase: 'source', target: [] }, message: null } }
+    }
     case 'next': {
       const op = state.ui.operation
+      if (op.kind === 'reference') {
+        if (op.phase !== 'source') return state
+        if (op.source.length === 0) return { ...state, ui: { ...state.ui, message: { kind: 'error', text: NO_SOURCE_MESSAGE } } }
+        if (commonRelation(state.doc, op.source) === null)
+          return { ...state, ui: { ...state.ui, message: { kind: 'error', text: SOURCE_ONE_TABLE_MESSAGE } } }
+        if (!isContiguous(state.doc, op.source)) return { ...state, ui: { ...state.ui, message: { kind: 'error', text: REFERENCE_ADJACENT_ERROR } } }
+        return { ...state, ui: { ...state.ui, operation: { ...op, phase: 'target' }, message: null } }
+      }
       if ((op.kind !== 'move' && op.kind !== 'copy') || op.phase !== 'selecting') return state
       if (selectedAttributeIds(state.ui).length === 0)
         return { ...state, ui: { ...state.ui, message: { kind: 'error', text: NO_ATTRIBUTES_MESSAGE } } }

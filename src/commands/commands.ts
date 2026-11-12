@@ -10,7 +10,7 @@
  * Commands check structural preconditions only (things exist, IDs are unique,
  * references stay well-formed). They never apply normalization rules.
  */
-import type { Attribute, Id, KrijtDocument, Point, Reference, Relation, SourceField } from '../model/types'
+import type { Attribute, Id, KrijtDocument, Point, Reference, ReferenceEnd, Relation, SourceField } from '../model/types'
 
 export type AttributeFlag = 'primaryKey' | 'nullable' | 'calculated'
 
@@ -35,6 +35,9 @@ export type Command =
   | { type: 'moveAttributes'; attributeIds: Id[]; destination: Destination }
   /** Copies get new IDs (`newIds[i]` for the i-th attribute in document order) and no references. */
   | { type: 'copyAttributes'; attributeIds: Id[]; newIds: Id[]; destination: Destination }
+  /** Ends are stored in table order: the i-th foreign-key attribute (left to right) refers to the i-th referenced one. */
+  | { type: 'addReference'; reference: Reference }
+  | { type: 'deleteReference'; referenceId: Id }
 
 /** `notice` tells the student about dependent changes, e.g. references removed with an attribute. */
 export type CommandResult = { ok: true; doc: KrijtDocument; notice?: string } | { ok: false; error: string }
@@ -141,6 +144,128 @@ function emptiedTablesNotice(before: KrijtDocument, after: Relation[]): string |
   return removed > 0 ? `${plural(removed, 'empty table')} removed.` : undefined
 }
 
+/**
+ * Reference ends are units: each end's attributes sit side by side in its
+ * table and stay that way. These ranges (index [start, end], merged where ends
+ * overlap) are what ← → shift as one block and what insertions never split.
+ * Ends containing an attribute in `exclude` (the ones being moved) are left out.
+ */
+export function referenceBlocks(doc: KrijtDocument, relationId: Id, exclude?: ReadonlySet<Id>): [number, number][] {
+  const r = doc.relations.find((x) => x.id === relationId)
+  if (!r) return []
+  const index = new Map(r.attributes.map((a, i) => [a.id, i]))
+  const ranges: [number, number][] = []
+  for (const ref of doc.references)
+    for (const end of [ref.from, ref.to]) {
+      if (end.relationId !== relationId || end.attributeIds.length < 2) continue
+      if (exclude && end.attributeIds.some((id) => exclude.has(id))) continue
+      const at = end.attributeIds.map((id) => index.get(id)).filter((i): i is number => i !== undefined)
+      if (at.length) ranges.push([Math.min(...at), Math.max(...at)])
+    }
+  ranges.sort((a, b) => a[0] - b[0])
+  const merged: [number, number][] = []
+  for (const [a, b] of ranges) {
+    const last = merged[merged.length - 1]
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b)
+    else merged.push([a, b])
+  }
+  return merged
+}
+
+/** An insertion index that would land inside a block moves to the block's nearer edge (after it, on a tie). */
+export function snapIndex(blocks: [number, number][], index: number): number {
+  for (const [a, b] of blocks) if (a < index && index <= b) return index - a < b + 1 - index ? a : b + 1
+  return index
+}
+
+function snapDestination(doc: KrijtDocument, dest: Destination, exclude?: ReadonlySet<Id>): Destination {
+  if (dest.kind !== 'table' || dest.index === undefined) return dest
+  return { ...dest, index: snapIndex(referenceBlocks(doc, dest.relationId, exclude), dest.index) }
+}
+
+/** The attributes plus every other member of any reference end they belong to (repeated for overlapping ends). */
+export function expandToUnits(doc: KrijtDocument, ids: Iterable<Id>): Id[] {
+  const set = new Set(ids)
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const ref of doc.references)
+      for (const end of [ref.from, ref.to])
+        if (end.attributeIds.some((id) => set.has(id)) && !end.attributeIds.every((id) => set.has(id))) {
+          end.attributeIds.forEach((id) => set.add(id))
+          grew = true
+        }
+  }
+  return orderAttributeIds(doc, set)
+}
+
+/** Whether the attributes are side by side (in one table). */
+export function isContiguous(doc: KrijtDocument, ids: Id[]): boolean {
+  if (ids.length < 2) return true
+  for (const r of doc.relations) {
+    const at = r.attributes.map((a, i) => (ids.includes(a.id) ? i : -1)).filter((i) => i >= 0)
+    if (at.length === 0) continue
+    return at.length === new Set(ids).size && at[at.length - 1]! - at[0]! === at.length - 1
+  }
+  return false
+}
+
+function isContiguousIn(list: Attribute[], ids: Id[]): boolean {
+  const at = list.map((a, i) => (ids.includes(a.id) ? i : -1)).filter((i) => i >= 0)
+  return at.length < 2 || at[at.length - 1]! - at[0]! === at.length - 1
+}
+
+/**
+ * One shift step: each selected item swaps with an unselected neighbour in the direction `delta`; selected items
+ * side by side move as one. Returns the new list, or null if nothing could move.
+ */
+function swapSelected<T>(items: T[], selected: (t: T) => boolean, delta: -1 | 1): T[] | null {
+  const list = [...items]
+  let changed = false
+  const indices = list.map((_, i) => i)
+  if (delta > 0) indices.reverse()
+  for (const i of indices) {
+    const j = i + delta
+    if (j < 0 || j >= list.length) continue
+    if (selected(list[i]!) && !selected(list[j]!)) {
+      ;[list[i], list[j]] = [list[j]!, list[i]!]
+      changed = true
+    }
+  }
+  return changed ? list : null
+}
+
+export const REFERENCE_ADJACENT_ERROR =
+  'The attributes of each end must be next to each other in their table. Put them side by side first (← →).'
+
+/**
+ * Why a reference cannot be created, or null if it can. Structure only: both
+ * ends exist, each lies in one table, has no repeats and the same size as the
+ * other, no attribute refers to itself, and each end's attributes are side by
+ * side (the course convention, which keeps every end a movable unit). Keys and
+ * names are never checked.
+ */
+export function referenceProblem(doc: KrijtDocument, from: ReferenceEnd, to: ReferenceEnd): string | null {
+  const owner = new Map<Id, Id>()
+  for (const r of doc.relations) for (const a of r.attributes) owner.set(a.id, r.id)
+  if (from.attributeIds.length === 0) return 'Select the foreign-key attributes first.'
+  if (to.attributeIds.length === 0) return 'Select the referenced attributes first.'
+  for (const end of [from, to]) {
+    if (new Set(end.attributeIds).size !== end.attributeIds.length) return 'An attribute can be used only once in each end of a reference.'
+    if (!end.attributeIds.every((id) => owner.has(id))) return 'Those attributes no longer exist.'
+    if (!end.attributeIds.every((id) => owner.get(id) === end.relationId)) return REFERENCE_ONE_TABLE_ERROR
+  }
+  if (from.attributeIds.length !== to.attributeIds.length)
+    return `The foreign key has ${plural(from.attributeIds.length, 'attribute')}; select the same number of referenced attributes.`
+  if (from.attributeIds.some((id) => to.attributeIds.includes(id))) return 'An attribute cannot refer to itself.'
+  if (!isContiguous(doc, from.attributeIds) || !isContiguous(doc, to.attributeIds)) return REFERENCE_ADJACENT_ERROR
+  return null
+}
+
+export const REFERENCE_ONE_TABLE_ERROR = 'Each end of a reference must lie within one table.'
+
+const sameIds = (a: Id[], b: Id[]) => a.length === b.length && a.every((id, i) => id === b[i])
+
 export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
   switch (cmd.type) {
     case 'addSourceFields': {
@@ -178,7 +303,8 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
       if (!freshIds(doc, cmd.attributes.map((a) => a.id))) return fail('Attribute IDs are not unique.')
       const next = mapRelation(doc, cmd.relationId, (r) => {
         const attributes = [...r.attributes]
-        attributes.splice(clampIndex(cmd.index, attributes.length), 0, ...cmd.attributes.map((a) => ({ ...a })))
+        const at = cmd.index === undefined ? undefined : snapIndex(referenceBlocks(doc, r.id), cmd.index)
+        attributes.splice(clampIndex(at, attributes.length), 0, ...cmd.attributes.map((a) => ({ ...a })))
         return { ...r, attributes }
       })
       return next ? ok(next) : fail('That table no longer exists.')
@@ -251,29 +377,68 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
     case 'shiftAttributes': {
       const attrs = existingAttributes(doc, cmd.attributeIds)
       if (!attrs) return fail('Those attributes no longer exist.')
+      const isSel = (a: Attribute) => attrs.set.has(a.id)
       let changed = false
       const relations = doc.relations.map((r) => {
-        if (!r.attributes.some((a) => attrs.set.has(a.id))) return r
-        const list = [...r.attributes]
-        // Each selected attribute swaps with an unselected neighbour; a selected block moves as one.
-        const indices = list.map((_, i) => i)
-        if (cmd.delta > 0) indices.reverse()
-        for (const i of indices) {
-          const j = i + cmd.delta
-          if (j < 0 || j >= list.length) continue
-          if (attrs.set.has(list[i]!.id) && !attrs.set.has(list[j]!.id)) {
-            ;[list[i], list[j]] = [list[j]!, list[i]!]
-            changed = true
+        if (!r.attributes.some(isSel)) return r
+        const blocks = referenceBlocks(doc, r.id)
+        const ends = doc.references.flatMap((ref) => [ref.from, ref.to]).filter((e) => e.relationId === r.id)
+        let attributes = [...r.attributes]
+        // Blocks that move as a whole: fully selected ones, and partly selected ones whose selection cannot
+        // move further inside (it reached the block's edge), so a press is never a dead key.
+        const wholeBlocks = new Set<number>()
+        blocks.forEach(([a, b], k) => {
+          const slice = attributes.slice(a, b + 1)
+          const count = slice.filter(isSel).length
+          if (count === 0) return
+          if (count === slice.length) {
+            wholeBlocks.add(k)
+            return
+          }
+          // Partly selected: reorder within the block, if every reference end stays side by side.
+          const inner = swapSelected(slice, isSel, cmd.delta)
+          if (!inner) return wholeBlocks.add(k)
+          const trial = [...attributes.slice(0, a), ...inner, ...attributes.slice(b + 1)]
+          if (!ends.every((e) => isContiguousIn(trial, e.attributeIds))) return wholeBlocks.add(k)
+          attributes = trial
+          changed = true
+        })
+        // Units: each block is one unit, every other attribute its own unit.
+        const units: { attrs: Attribute[]; selected: boolean }[] = []
+        for (let i = 0; i < attributes.length; ) {
+          const k = blocks.findIndex(([a]) => a === i)
+          if (k >= 0) {
+            units.push({ attrs: attributes.slice(i, blocks[k]![1] + 1), selected: wholeBlocks.has(k) })
+            i = blocks[k]![1] + 1
+          } else {
+            units.push({ attrs: [attributes[i]!], selected: isSel(attributes[i]!) })
+            i++
           }
         }
-        return { ...r, attributes: list }
+        const moved = swapSelected(units, (u) => u.selected, cmd.delta)
+        if (moved) {
+          attributes = moved.flatMap((u) => u.attrs)
+          changed = true
+        }
+        return { ...r, attributes }
       })
-      return changed ? ok({ ...doc, relations }) : ok(doc)
+      if (!changed) return ok(doc)
+      // Ends pair up left to right, so after reordering inside an end its stored order follows the table.
+      const next = { ...doc, relations }
+      const references = doc.references.map((ref) => ({
+        ...ref,
+        from: { ...ref.from, attributeIds: orderAttributeIds(next, ref.from.attributeIds) },
+        to: { ...ref.to, attributeIds: orderAttributeIds(next, ref.to.attributeIds) },
+      }))
+      return ok({ ...next, references })
     }
     case 'moveAttributes': {
-      const attrs = existingAttributes(doc, cmd.attributeIds)
-      if (!attrs) return fail('Those attributes no longer exist.')
-      const dest = cmd.destination
+      if (!existingAttributes(doc, cmd.attributeIds)) return fail('Those attributes no longer exist.')
+      // A reference end moves as a unit: moving one member brings the others along.
+      const asked = new Set(cmd.attributeIds)
+      const attrs = existingAttributes(doc, expandToUnits(doc, cmd.attributeIds))!
+      const along = attrs.ordered.filter((id) => !asked.has(id))
+      const dest = snapDestination(doc, cmd.destination, attrs.set)
       if (dest.kind === 'newTable' && !freshIds(doc, [dest.relationId])) return fail('Table ID is not unique.')
       const destRelationId = dest.relationId
       // A reference end must stay within one table: all of its attributes move, or none.
@@ -301,13 +466,18 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
           end.attributeIds.every((id) => attrs.set.has(id)) ? { ...end, relationId: destRelationId } : end
         return { ...ref, from: moveEnd(ref.from), to: moveEnd(ref.to) }
       })
-      return ok({ ...doc, relations, references }, emptiedTablesNotice(doc, relations))
+      const byIdName = (id: Id) => byId.get(id)?.name || '(no name)'
+      const notes = [
+        along.length > 0 ? `Moved ${along.map(byIdName).join(', ')} along, to keep the reference together.` : undefined,
+        emptiedTablesNotice(doc, relations),
+      ].filter(Boolean)
+      return ok({ ...doc, relations, references }, notes.length ? notes.join(' ') : undefined)
     }
     case 'copyAttributes': {
       const attrs = existingAttributes(doc, cmd.attributeIds)
       if (!attrs) return fail('Those attributes no longer exist.')
       if (cmd.newIds.length !== attrs.ordered.length) return fail('Copy IDs do not match the attributes.')
-      const dest = cmd.destination
+      const dest = snapDestination(doc, cmd.destination)
       const fresh = dest.kind === 'newTable' ? [...cmd.newIds, dest.relationId] : cmd.newIds
       if (!freshIds(doc, fresh)) return fail('Copy IDs are not unique.')
       const byId = attributeById(doc)
@@ -315,6 +485,27 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
       const relations = placeAttributes(doc.relations, copies, dest)
       if (!relations) return fail('That table no longer exists.')
       return ok({ ...doc, relations })
+    }
+    case 'addReference': {
+      const { id, from, to } = cmd.reference
+      if (!freshIds(doc, [id])) return fail('Reference ID is not unique.')
+      const problem = referenceProblem(doc, from, to)
+      if (problem) return fail(problem)
+      const f = orderAttributeIds(doc, from.attributeIds)
+      const t = orderAttributeIds(doc, to.attributeIds)
+      if (doc.references.some((ref) => sameIds(ref.from.attributeIds, f) && sameIds(ref.to.attributeIds, t)))
+        return fail('That reference already exists.')
+      // Ends are stored in table order: the pairing is left to right, as the diagram shows it.
+      const reference: Reference = {
+        id,
+        from: { relationId: from.relationId, attributeIds: orderAttributeIds(doc, from.attributeIds) },
+        to: { relationId: to.relationId, attributeIds: orderAttributeIds(doc, to.attributeIds) },
+      }
+      return ok({ ...doc, references: [...doc.references, reference] })
+    }
+    case 'deleteReference': {
+      if (!doc.references.some((ref) => ref.id === cmd.referenceId)) return fail('That reference no longer exists.')
+      return ok({ ...doc, references: doc.references.filter((ref) => ref.id !== cmd.referenceId) })
     }
   }
 }

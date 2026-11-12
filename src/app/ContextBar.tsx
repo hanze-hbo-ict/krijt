@@ -11,7 +11,7 @@ import type { AttributeFlag } from '../commands/commands'
 import { Icon } from '../components/Icon'
 import type { Attribute, KrijtDocument } from '../model/types'
 import { SELECT, selectedAttributeIds, type Action, type AppState } from '../state/appState'
-import { operationInstruction } from '../state/interaction'
+import { describeReference, nextStepAction, operationInstruction, referenceReady } from '../state/interaction'
 
 interface Props {
   state: AppState
@@ -52,6 +52,14 @@ export function ToolStrip({ state, dispatch }: Props) {
       active: op.kind === 'copy',
       hint: 'Copy attributes; the originals stay',
       onClick: () => dispatch(op.kind === 'copy' ? { type: 'cancel' } : { type: 'startAttributes', kind: 'copy' }),
+    },
+    {
+      id: 'reference',
+      label: 'Reference',
+      icon: 'reference',
+      active: op.kind === 'reference',
+      hint: 'Draw a reference from foreign-key attributes to the attributes they refer to',
+      onClick: () => dispatch(op.kind === 'reference' ? { type: 'cancel' } : { type: 'startReference' }),
     },
   ]
   return (
@@ -173,6 +181,10 @@ function AttributeActions({ state, dispatch }: Props) {
         <Icon name="copy" />
         Copy to…
       </button>
+      <button type="button" title="Use the selection as the foreign key of a new reference" onClick={() => dispatch({ type: 'startReference', fromSelection: true })}>
+        <Icon name="reference" />
+        Reference from…
+      </button>
       <button
         type="button"
         className="danger-quiet"
@@ -222,7 +234,38 @@ function TableActions({ state, dispatch }: Props) {
   )
 }
 
-const OP_BADGE: Record<string, string> = { place: 'Place', moveTable: 'Move table', move: 'Move', copy: 'Copy' }
+function ReferenceActions({ state, dispatch }: Props) {
+  const sel = state.ui.selection
+  if (sel.kind !== 'reference') return null
+  const ref = state.doc.references.find((r) => r.id === sel.referenceId)
+  if (!ref) return null
+  const { from, to } = describeReference(state.doc, ref)
+  return (
+    <>
+      <span className="selection-label reference-label">
+        Reference <strong>{from}</strong> <span aria-label="refers to">→</span> <strong>{to}</strong>
+      </span>
+      <button
+        type="button"
+        className="danger-quiet"
+        title="Delete (Del)"
+        onClick={() => dispatch({ type: 'command', command: { type: 'deleteReference', referenceId: ref.id } })}
+      >
+        <Icon name="trash" />
+        Delete reference
+      </button>
+    </>
+  )
+}
+
+const OP_BADGE: Record<string, string> = { place: 'Place', moveTable: 'Move table', move: 'Move', copy: 'Copy', reference: 'Reference' }
+
+function stepLabel(state: AppState): string | null {
+  const op = state.ui.operation
+  if (op.kind === 'move' || op.kind === 'copy') return op.phase === 'selecting' ? 'step 1 of 2' : 'step 2 of 2'
+  if (op.kind === 'reference') return op.phase === 'source' ? 'step 1 of 2: foreign key' : 'step 2 of 2: referenced'
+  return null
+}
 
 export function ContextBar({ state, dispatch }: Props) {
   const { doc, ui } = state
@@ -235,7 +278,7 @@ export function ContextBar({ state, dispatch }: Props) {
         <div className="bar-content operation" role="region" aria-label="Current operation">
           <span className="op-badge">
             {OP_BADGE[op.kind]}
-            {(op.kind === 'move' || op.kind === 'copy') && <span className="op-step"> · {op.phase === 'selecting' ? 'step 1 of 2' : 'step 2 of 2'}</span>}
+            {stepLabel(state) && <span className="op-step"> · {stepLabel(state)}</span>}
           </span>
           <span className="instruction" aria-live="polite">
             {instruction}
@@ -244,6 +287,30 @@ export function ContextBar({ state, dispatch }: Props) {
             <button type="button" className="primary" onClick={() => dispatch({ type: 'next' })} disabled={selectedAttributeIds(ui).length === 0}>
               Next: choose destination <kbd>Enter</kbd>
             </button>
+          )}
+          {op.kind === 'reference' && op.phase === 'source' && (
+            <button type="button" className="primary" onClick={() => dispatch({ type: 'next' })} disabled={op.source.length === 0}>
+              Next: referenced attributes <kbd>Enter</kbd>
+            </button>
+          )}
+          {op.kind === 'reference' && op.phase === 'target' && (
+            <>
+              <button type="button" onClick={() => dispatch({ type: 'back' })}>
+                <Icon name="back" />
+                Back
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={!referenceReady(state)}
+                onClick={() => {
+                  const action = nextStepAction(state)
+                  if (action) dispatch(action)
+                }}
+              >
+                Finish <kbd>Enter</kbd>
+              </button>
+            </>
           )}
           <button type="button" className="cancel-button" onClick={() => dispatch({ type: 'cancel' })}>
             Cancel <kbd>Esc</kbd>
@@ -255,6 +322,8 @@ export function ContextBar({ state, dispatch }: Props) {
             <AttributeActions state={state} dispatch={dispatch} />
           ) : ui.selection.kind === 'relation' ? (
             <TableActions state={state} dispatch={dispatch} />
+          ) : ui.selection.kind === 'reference' ? (
+            <ReferenceActions state={state} dispatch={dispatch} />
           ) : (
             <span className="hint">
               {doc.relations.length === 0

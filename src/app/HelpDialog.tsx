@@ -43,6 +43,14 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
               </td>
               <td>Calculated and nullable</td>
             </tr>
+            <tr>
+              <td>a → b</td>
+              <td>Reference: the arrow points from the foreign key to the attribute it refers to</td>
+            </tr>
+            <tr>
+              <td>{'{ } → { }'}</td>
+              <td>Composite reference: a brace groups each end; the attributes pair up left to right</td>
+            </tr>
           </tbody>
         </table>
 
@@ -71,6 +79,28 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
             current selection. Dragging a cell moves it.
           </li>
           <li>A table that loses its last attribute is removed.</li>
+        </ul>
+        <h3>References</h3>
+        <ul>
+          <li>
+            <strong>Reference</strong>: click the foreign-key attribute (or several, side by side in one table), <strong>Next</strong>{' '}
+            (<kbd>Enter</kbd>), then click the attributes they refer to (also side by side), and <strong>Finish</strong> (<kbd>Enter</kbd>).
+            The attributes pair up left to right, as the numbers on the cells show; put them in the right order first with{' '}
+            <kbd>←</kbd> <kbd>→</kbd>.
+          </li>
+          <li>
+            <strong>Reference from…</strong> uses the selected attributes as the foreign key. <strong>Back</strong> returns to the foreign
+            key; <kbd>Esc</kbd> cancels without changing anything.
+          </li>
+          <li>
+            Click a connector to select it, then <strong>Delete reference</strong> (or <kbd>Del</kbd>). Deleting an attribute or table also
+            deletes the references that use it; undo brings both back.
+          </li>
+          <li>
+            Each end of a reference is one unit. <kbd>←</kbd> <kbd>→</kbd> on part of an end reorder it (and so the pairing); on the whole end,
+            or at its edge, they move the block. Moving one of its attributes brings the others along, and nothing is inserted between
+            them. Connectors follow their cells.
+          </li>
         </ul>
         <h3>Tables</h3>
         <ul>

@@ -92,6 +92,13 @@ textarea:focus-visible {
 .primary:hover:enabled {
   background: var(--accent-hover);
 }
+/* A key hint inside a filled button takes the button's text colour, not the light key background. */
+.primary kbd {
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
+  opacity: 0.85;
+}
 .danger-quiet {
   color: var(--error);
 }
@@ -755,6 +762,113 @@ textarea:focus-visible {
 .add-cell:focus-visible rect {
   stroke: var(--focus);
   stroke-width: 2.5;
+}
+
+/* References: connector, arrowhead, braces. A wide transparent stroke is the hit area. */
+.reference {
+  cursor: pointer;
+}
+.reference-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  stroke-linecap: butt;
+  pointer-events: stroke;
+}
+.reference-hit.brace-hit {
+  stroke-width: 6;
+}
+.reference-line,
+.reference-brace {
+  fill: none;
+  stroke: var(--diagram-connector);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.reference-arrow,
+.reference-dot {
+  fill: var(--diagram-connector);
+  pointer-events: none;
+}
+.reference-halo {
+  fill: none;
+  stroke: var(--selection);
+  stroke-width: 7;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.reference:hover .reference-line,
+.reference:hover .reference-brace,
+.reference[data-selected] .reference-line,
+.reference[data-selected] .reference-brace {
+  stroke: var(--accent);
+  stroke-width: 2.25;
+}
+.reference:hover .reference-arrow,
+.reference:hover .reference-dot,
+.reference[data-selected] .reference-arrow,
+.reference[data-selected] .reference-dot {
+  fill: var(--accent);
+}
+.reference:focus-visible {
+  outline: none;
+}
+.reference:focus-visible .reference-halo,
+.reference:focus-visible .reference-hit {
+  stroke: var(--focus);
+  stroke-opacity: 0.35;
+}
+/* While any operation runs, connectors are click-through so they never block a cell or a destination. */
+.canvas:not([data-operation='select']) .reference,
+.canvas[data-choosing] .reference {
+  pointer-events: none;
+}
+.canvas:not([data-operation='select']) .reference-hit {
+  pointer-events: none;
+}
+
+/* Ends of the reference being made or selected. Cells are light paper in both themes, so fixed colours.
+   Foreign key: dashed amber frame; referenced: solid teal frame. Composite ends also carry numbers. */
+.cell-ref-mark {
+  fill: none;
+  stroke-width: 3;
+  pointer-events: none;
+}
+.cell[data-ref-role='source'] .cell-box {
+  fill: #fff4e0;
+}
+.cell[data-ref-role='source'] .cell-ref-mark {
+  stroke: #b45309;
+  stroke-dasharray: 6 3;
+}
+.cell[data-ref-role='target'] .cell-box {
+  fill: #e2f5f1;
+}
+.cell[data-ref-role='target'] .cell-ref-mark {
+  stroke: #0f766e;
+}
+.cell-ref-badge {
+  pointer-events: none;
+}
+.cell-ref-badge text {
+  fill: #ffffff;
+  font-size: 8.5px;
+  font-weight: 700;
+  text-anchor: middle;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.cell[data-ref-role='source'] .cell-ref-badge circle {
+  fill: #b45309;
+}
+.cell[data-ref-role='target'] .cell-ref-badge circle {
+  fill: #0f766e;
+}
+.reference-label {
+  max-width: 60ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Destination previews: an insertion bar, or the outline of a new table. */

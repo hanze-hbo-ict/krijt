@@ -20,14 +20,25 @@ import {
   type PointerEvent,
 } from 'react'
 import { addAttributesFromNames } from '../commands/builders'
+import { orderAttributeIds } from '../commands/commands'
 import { Icon } from '../components/Icon'
 import { InlineInput } from '../components/InlineInput'
 import { contentBounds, layoutRelation, METRICS, type RelationLayout, type TextMeasurer } from '../geometry/layout'
+import { layoutReferences } from '../geometry/references'
 import { fitToBounds, panBy, screenToWorld, zoomAt, type Viewport } from '../geometry/viewport'
 import type { Id, Point } from '../model/types'
 import { selectedAttributeIds, type Action, type AppState } from '../state/appState'
-import { choosingDestination, destinationFor, resolveCanvasClick, transferAction, type CanvasTarget } from '../state/interaction'
-import { RelationView } from './RelationView'
+import {
+  choosingDestination,
+  describeReference,
+  destinationFor,
+  nextStepAction,
+  resolveCanvasClick,
+  transferAction,
+  type CanvasTarget,
+} from '../state/interaction'
+import { ReferenceView } from './ReferenceView'
+import { RelationView, type CellMark } from './RelationView'
 
 /** Screen pixels a pointer must travel before a press becomes a drag. */
 export const DRAG_THRESHOLD = 6
@@ -57,6 +68,7 @@ function targetFrom(el: Element | null, clientX?: number): CanvasTarget {
   const node = el ? el.closest('[data-kind]') : null
   if (!node) return { kind: 'empty' }
   const kind = node.getAttribute('data-kind')
+  if (kind === 'reference') return { kind, referenceId: node.getAttribute('data-reference') ?? '' }
   const relationId = node.getAttribute('data-relation') ?? ''
   if (kind === 'attribute') {
     const attributeId = node.getAttribute('data-attribute') ?? ''
@@ -127,6 +139,17 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     for (const r of doc.relations) map.set(r.id, layoutRelation(r, measurer))
     return map
   }, [doc.relations, measurer])
+
+  // While a table is dragged, its connectors follow it.
+  const shownLayouts = useMemo(() => {
+    if (drag?.kind !== 'table') return layouts
+    const r = doc.relations.find((x) => x.id === drag.relationId)
+    if (!r) return layouts
+    const map = new Map(layouts)
+    map.set(r.id, layoutRelation({ ...r, position: { x: r.position.x + drag.dx, y: r.position.y + drag.dy } }, measurer))
+    return map
+  }, [layouts, drag, doc.relations, measurer])
+  const referenceGeometry = useMemo(() => layoutReferences(doc.references, shownLayouts), [doc.references, shownLayouts])
 
   const toWorld = (clientX: number, clientY: number): Point => {
     const rect = svgRef.current!.getBoundingClientRect()
@@ -244,10 +267,14 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     e.preventDefault()
     e.stopPropagation()
     const s = stateRef.current
-    const op = s.ui.operation
-    // While selecting for Move/Copy, Enter is always Next (Space toggles the focused cell).
-    if (e.key === 'Enter' && (op.kind === 'move' || op.kind === 'copy') && op.phase === 'selecting') {
-      dispatch({ type: 'next' })
+    // While choosing attributes for Move/Copy/Reference, Enter is always Next/Finish (Space toggles the focused cell).
+    const step = e.key === 'Enter' ? nextStepAction(s) : null
+    if (step) {
+      dispatch(step)
+      return
+    }
+    if (target.kind === 'reference') {
+      activate(target, { x: 0, y: 0 })
       return
     }
     // Enter on the one selected cell renames it (as double-click does); otherwise Enter/Space activate.
@@ -289,6 +316,34 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
   const draggedSet = useMemo(() => new Set(drag?.kind === 'attributes' ? drag.attributeIds : []), [drag])
   const editing = ui.editing
 
+  // Cells of the reference being created, or of the selected reference; composite ends are numbered left to right.
+  const marks = useMemo(() => {
+    const map = new Map<Id, CellMark>()
+    const mark = (ids: Id[], role: CellMark['role'], numbered: boolean) =>
+      orderAttributeIds(doc, ids).forEach((id, i) => map.set(id, numbered ? { role, index: i + 1 } : { role }))
+    if (op.kind === 'reference') {
+      const numbered = op.source.length > 1
+      mark(op.source, 'source', numbered)
+      mark(op.target, 'target', numbered)
+    } else if (selection.kind === 'reference') {
+      const ref = doc.references.find((r) => r.id === selection.referenceId)
+      if (ref) {
+        const numbered = ref.from.attributeIds.length > 1
+        mark(ref.from.attributeIds, 'source', numbered)
+        mark(ref.to.attributeIds, 'target', numbered)
+      }
+    }
+    return map
+  }, [op, selection, doc])
+  const referenceLabels = useMemo(() => {
+    const map = new Map<Id, string>()
+    for (const ref of doc.references) {
+      const { from, to } = describeReference(doc, ref)
+      map.set(ref.id, `Reference from ${from} to ${to}`)
+    }
+    return map
+  }, [doc])
+
   const screenRect = (x: number, y: number, width: number, height: number) => ({
     left: x * viewport.zoom + viewport.x,
     top: y * viewport.zoom + viewport.y,
@@ -326,7 +381,7 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
           {doc.relations.map((r) => {
             const dragged = drag?.kind === 'table' && drag.relationId === r.id
             const shown = dragged ? { ...r, position: { x: r.position.x + drag.dx, y: r.position.y + drag.dy } } : r
-            const layout = dragged ? layoutRelation(shown, measurer) : layouts.get(r.id)!
+            const layout = shownLayouts.get(r.id)!
             const relSelected =
               (selection.kind === 'relation' && selection.relationId === r.id) || (op.kind === 'moveTable' && op.relationId === r.id)
             return (
@@ -340,9 +395,20 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
                 draggedAttributeIds={draggedSet}
                 destination={destinationMode}
                 dragging={dragged}
+                marks={marks}
               />
             )
           })}
+          <g className="references">
+            {referenceGeometry.map((g) => (
+              <ReferenceView
+                key={g.referenceId}
+                geometry={g}
+                selected={selection.kind === 'reference' && selection.referenceId === g.referenceId}
+                label={referenceLabels.get(g.referenceId) ?? 'Reference'}
+              />
+            ))}
+          </g>
           {preview && <DestinationPreview intent={preview} layouts={layouts} count={hover!.count} />}
         </g>
       </svg>

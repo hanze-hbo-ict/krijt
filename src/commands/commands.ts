@@ -38,6 +38,8 @@ export type Command =
   /** Ends are stored in table order: the i-th foreign-key attribute (left to right) refers to the i-th referenced one. */
   | { type: 'addReference'; reference: Reference }
   | { type: 'deleteReference'; referenceId: Id }
+  /** New diagram: removes all tables and references, and also the form fields unless `keepFields`. */
+  | { type: 'clearDocument'; keepFields: boolean }
 
 /** `notice` tells the student about dependent changes, e.g. references removed with an attribute. */
 export type CommandResult = { ok: true; doc: KrijtDocument; notice?: string } | { ok: false; error: string }
@@ -502,6 +504,11 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
         to: { relationId: to.relationId, attributeIds: orderAttributeIds(doc, to.attributeIds) },
       }
       return ok({ ...doc, references: [...doc.references, reference] })
+    }
+    case 'clearDocument': {
+      const sourceFields = cmd.keepFields ? doc.sourceFields : []
+      if (doc.relations.length === 0 && doc.references.length === 0 && sourceFields.length === doc.sourceFields.length) return ok(doc)
+      return ok({ format: 'krijt', version: 1, sourceFields, relations: [], references: [] })
     }
     case 'deleteReference': {
       if (!doc.references.some((ref) => ref.id === cmd.referenceId)) return fail('That reference no longer exists.')

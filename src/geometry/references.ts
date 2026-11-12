@@ -53,11 +53,15 @@ export type ReferenceGeometry = {
   bounds: Rect
 }
 
-type Anchor = { point: Point; brace: string | null; dots: Point[]; extent: Rect }
+/** `range`: where along the edge the connector may meet this end (a straight line may use any x in it). */
+type Anchor = { point: Point; brace: string | null; dots: Point[]; extent: Rect; range: [number, number] }
 
-/** A horizontal curly brace from x1 to x2; its back lies at y0 and its tip points `dir` (+1 down, -1 up). */
-export function bracePath(x1: number, x2: number, y0: number, dir: 1 | -1, depth: number = REFERENCE_METRICS.braceDepth): string {
-  const mid = (x1 + x2) / 2
+/**
+ * A horizontal curly brace from x1 to x2; its back lies at y0 and its tip points `dir` (+1 down, -1 up).
+ * The tip is at the middle unless `tipX` moves it (kept within the middle half, so the brace stays a brace).
+ */
+export function bracePath(x1: number, x2: number, y0: number, dir: 1 | -1, depth: number = REFERENCE_METRICS.braceDepth, tipX?: number): string {
+  const mid = tipX ?? (x1 + x2) / 2
   const half = y0 + (dir * depth) / 2
   const tip = y0 + dir * depth
   const r = Math.max(0, Math.min(depth / 2, (x2 - x1) / 4))
@@ -73,7 +77,7 @@ export function bracePath(x1: number, x2: number, y0: number, dir: 1 | -1, depth
   ].join(' ')
 }
 
-function endAnchor(layout: RelationLayout, end: ReferenceEnd, side: Side): Anchor | null {
+function endAnchor(layout: RelationLayout, end: ReferenceEnd, side: Side, tipX?: number): Anchor | null {
   const members = new Set(end.attributeIds)
   const indices: number[] = []
   layout.cells.forEach((c, i) => members.has(c.attributeId) && indices.push(i))
@@ -83,8 +87,10 @@ function endAnchor(layout: RelationLayout, end: ReferenceEnd, side: Side): Ancho
   const dir = side === 'bottom' ? 1 : -1
   const edgeY = side === 'bottom' ? layout.y + layout.height : layout.y
   if (indices.length === 1) {
-    const x = first.x + first.width / 2
-    return { point: { x, y: edgeY }, brace: null, dots: [], extent: { x, y: edgeY, width: 0, height: 0 } }
+    const centre = first.x + first.width / 2
+    const range: [number, number] = [centre - first.width / 4, centre + first.width / 4]
+    const x = tipX ?? centre
+    return { point: { x, y: edgeY }, brace: null, dots: [], extent: { x, y: edgeY, width: 0, height: 0 }, range }
   }
   const M = REFERENCE_METRICS
   const x1 = first.x + M.braceInset
@@ -94,11 +100,15 @@ function endAnchor(layout: RelationLayout, end: ReferenceEnd, side: Side): Ancho
   const spanned = indices[indices.length - 1]! - indices[0]! + 1
   const dots =
     spanned > indices.length ? indices.map((i) => ({ x: layout.cells[i]!.x + layout.cells[i]!.width / 2, y: y0 + (dir * M.braceDepth) / 2 })) : []
+  const mid = (x1 + x2) / 2
+  const range: [number, number] = [mid - (x2 - x1) / 4, mid + (x2 - x1) / 4]
+  const x = tipX ?? mid
   return {
-    point: { x: (x1 + x2) / 2, y: tipY },
-    brace: bracePath(x1, x2, y0, dir),
+    point: { x, y: tipY },
+    brace: bracePath(x1, x2, y0, dir, M.braceDepth, tipX),
     dots,
     extent: { x: x1, y: Math.min(y0, tipY), width: x2 - x1, height: M.braceDepth },
+    range,
   }
 }
 
@@ -152,9 +162,19 @@ function referenceGeometry(ref: Reference, layouts: Map<Id, RelationLayout>, run
   else if (above) [sideS, sideT] = ['top', 'bottom']
   else [sideS, sideT] = ['bottom', 'bottom']
 
-  const a = endAnchor(s, ref.from, sideS)
-  const b = endAnchor(t, ref.to, sideT)
+  let a = endAnchor(s, ref.from, sideS)
+  let b = endAnchor(t, ref.to, sideT)
   if (!a || !b) return null
+  // One table above the other and the ends overlap horizontally: a single straight line, without a jog.
+  if (below || above) {
+    const lo = Math.max(a.range[0], b.range[0])
+    const hi = Math.min(a.range[1], b.range[1])
+    if (lo <= hi && Math.abs(a.point.x - b.point.x) >= 0.5) {
+      const x = Math.round(Math.min(hi, Math.max(lo, (a.point.x + b.point.x) / 2)) * 100) / 100
+      a = endAnchor(s, ref.from, sideS, x)!
+      b = endAnchor(t, ref.to, sideT, x)!
+    }
+  }
   const p = a.point
   const q = b.point
   const x1 = Math.min(p.x, q.x)

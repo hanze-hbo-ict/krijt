@@ -126,10 +126,12 @@ function AttributeActions({ state, dispatch }: Props) {
       {single && (
         <button
           type="button"
+          aria-label="Rename"
+          title="Rename (Enter)"
           onClick={() => dispatch({ type: 'ui', patch: { editing: { kind: 'attributeName', attributeId: single.attribute.id } } })}
         >
           <Icon name="pencil" />
-          Rename
+          <span className="collapsible narrow">Rename</span>
         </button>
       )}
       <span className="bar-group" role="group" aria-label="Notation">
@@ -173,26 +175,43 @@ function AttributeActions({ state, dispatch }: Props) {
           <Icon name="right" />
         </button>
       </span>
-      <button type="button" onClick={() => dispatch({ type: 'startAttributes', kind: 'move', fromSelection: true })}>
+      {/* On a narrow bar these show only their icons; the accessible name and tooltip stay. */}
+      <button
+        type="button"
+        aria-label="Move to…"
+        title="Move the selection to another place"
+        onClick={() => dispatch({ type: 'startAttributes', kind: 'move', fromSelection: true })}
+      >
         <Icon name="move" />
-        Move to…
+        <span className="collapsible">Move to…</span>
       </button>
-      <button type="button" onClick={() => dispatch({ type: 'startAttributes', kind: 'copy', fromSelection: true })}>
+      <button
+        type="button"
+        aria-label="Copy to…"
+        title="Copy the selection to another place"
+        onClick={() => dispatch({ type: 'startAttributes', kind: 'copy', fromSelection: true })}
+      >
         <Icon name="copy" />
-        Copy to…
+        <span className="collapsible">Copy to…</span>
       </button>
-      <button type="button" title="Use the selection as the foreign key of a new reference" onClick={() => dispatch({ type: 'startReference', fromSelection: true })}>
+      <button
+        type="button"
+        aria-label="Reference from…"
+        title="Use the selection as the foreign key of a new reference"
+        onClick={() => dispatch({ type: 'startReference', fromSelection: true })}
+      >
         <Icon name="reference" />
-        Reference from…
+        <span className="collapsible">Reference from…</span>
       </button>
       <button
         type="button"
         className="danger-quiet"
+        aria-label="Delete"
         title="Delete (Del)"
         onClick={() => dispatch({ type: 'command', command: { type: 'deleteAttributes', attributeIds: ids } })}
       >
         <Icon name="trash" />
-        Delete
+        <span className="collapsible">Delete</span>
       </button>
     </>
   )

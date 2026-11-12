@@ -61,13 +61,27 @@ export function parseSession(raw: string | null): SessionData | null {
 }
 
 export function loadSession(storage: Storage | null): SessionData | null {
-  if (!storage) return null
-  try {
-    return parseSession(storage.getItem(SESSION_KEY))
-  } catch {
-    return null
-  }
+  return readSession(storage).data
 }
+
+/**
+ * Reads the stored session and says what happened: nothing stored, restored, or stored but unusable
+ * (corrupt, from an incompatible version, or unreadable storage), so the student can be told.
+ */
+export function readSession(storage: Storage | null): { data: SessionData | null; status: 'none' | 'restored' | 'unreadable' } {
+  if (!storage) return { data: null, status: 'none' }
+  let raw: string | null
+  try {
+    raw = storage.getItem(SESSION_KEY)
+  } catch {
+    return { data: null, status: 'unreadable' }
+  }
+  if (raw === null) return { data: null, status: 'none' }
+  const data = parseSession(raw)
+  return data ? { data, status: 'restored' } : { data: null, status: 'unreadable' }
+}
+
+export const UNREADABLE_SESSION_MESSAGE = 'The work kept in this tab could not be restored, so Krijt started with an empty diagram.'
 
 /** Returns false if the write failed (quota, blocked storage). */
 export function saveSession(storage: Storage | null, data: SessionData): boolean {

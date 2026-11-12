@@ -4,19 +4,26 @@ import { Icon } from '../components/Icon'
 import { isTypingTarget } from '../components/InlineInput'
 import { Splitter } from '../components/Splitter'
 import { createCanvasMeasurer } from '../geometry/measure'
+import { DEFAULT_VIEWPORT } from '../geometry/viewport'
 import { Sidebar } from '../inventory/Sidebar'
-import { loadSession, safeSessionStorage, SAVE_DEBOUNCE_MS, saveSession } from '../persistence/session'
+import { browserEnv, COPY_MESSAGES, copyImage, copyText, failureMessage } from '../clipboard/clipboard'
+import { renderPng } from '../clipboard/paint'
+import { exportScale, exportScene } from '../clipboard/scene'
+import { serializeDocument } from '../model/serialize'
+import { readSession, safeSessionStorage, SAVE_DEBOUNCE_MS, saveSession, UNREADABLE_SESSION_MESSAGE } from '../persistence/session'
 import { initialState, reducer, selectedAttributeIds, SIDEBAR_MAX, SIDEBAR_MIN, type AppState } from '../state/appState'
 import { nextStepAction } from '../state/interaction'
 import { ContextBar, MessageBanner, ToolStrip } from './ContextBar'
+import { ClearDialog } from './ClearDialog'
 import { HelpDialog } from './HelpDialog'
 import { IS_MAC, MOD_KEY } from './platform'
 
 const NUDGE = 10
 
 function init(): AppState {
-  const session = loadSession(safeSessionStorage())
-  return session ? initialState(session.doc, session.ui) : initialState()
+  const { data, status } = readSession(safeSessionStorage())
+  if (data) return initialState(data.doc, data.ui)
+  return status === 'unreadable' ? initialState(undefined, { message: { kind: 'error', text: UNREADABLE_SESSION_MESSAGE } }) : initialState()
 }
 
 type SaveStatus = 'ok' | 'failed' | 'unavailable'
@@ -35,14 +42,14 @@ export function App() {
   const [state, dispatch] = useReducer(reducer, undefined, init)
   const measurer = useMemo(() => createCanvasMeasurer(), [])
   const [helpOpen, setHelpOpen] = useState(false)
+  const [clearOpen, setClearOpen] = useState(false)
+  const [copying, setCopying] = useState<'image' | 'data' | null>(null)
   const [ghost, setGhost] = useState<DragGhost>(null)
   const canvasHandle = useRef<CanvasHandle | null>(null)
   const storage = useMemo(() => safeSessionStorage(), [])
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(storage ? 'ok' : 'unavailable')
   const stateRef = useRef(state)
   stateRef.current = state
-  const helpOpenRef = useRef(helpOpen)
-  helpOpenRef.current = helpOpen
 
   // Debounced same-tab recovery after document or layout changes.
   const { doc } = state
@@ -53,10 +60,51 @@ export function App() {
     return () => clearTimeout(t)
   }, [storage, doc, viewport, sidebarWidth])
 
+  // Do not lose the last debounce window: save at once when the tab is hidden or the page goes away.
+  useEffect(() => {
+    if (!storage) return
+    const flush = () => {
+      const s = stateRef.current
+      saveSession(storage, { doc: s.doc, ui: { viewport: s.ui.viewport, sidebarWidth: s.ui.sidebarWidth } })
+    }
+    const onVisibility = () => document.visibilityState === 'hidden' && flush()
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [storage])
+
+  const say = (kind: 'error' | 'info', text: string) => dispatch({ type: 'ui', patch: { message: { kind, text } } })
+
+  // Both copies start synchronously inside the click, so the browser sees a user gesture.
+  const onCopyImage = () => {
+    const scene = exportScene(stateRef.current.doc, measurer)
+    if (!scene) return say('error', COPY_MESSAGES.empty)
+    const scale = exportScale(scene.bounds)
+    if (!scale) return say('error', COPY_MESSAGES.tooLarge)
+    setCopying('image')
+    void copyImage(browserEnv(), () => renderPng(scene, scale)).then((result) => {
+      setCopying(null)
+      if (result.ok) say('info', COPY_MESSAGES.imageCopied)
+      else say('error', failureMessage('image', result.reason, result.detail))
+    })
+  }
+  const onCopyData = () => {
+    setCopying('data')
+    void copyText(browserEnv(), serializeDocument(stateRef.current.doc)).then((result) => {
+      setCopying(null)
+      if (result.ok) say('info', COPY_MESSAGES.dataCopied)
+      else say('error', failureMessage('data', result.reason, result.detail))
+    })
+  }
+
   // Global shortcuts, never while typing in a text field (native undo there stays native).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || isTypingTarget(e.target) || helpOpenRef.current) return
+      // A modal dialog owns the keyboard. Checked in the DOM, not React state, which lags behind the close event.
+      if (e.defaultPrevented || isTypingTarget(e.target) || document.querySelector('dialog[open]')) return
       const s = stateRef.current
       const mod = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
@@ -131,6 +179,22 @@ export function App() {
           </div>
         </div>
         <div className="header-actions">
+          <div className="copy-actions" role="group" aria-label="Copy for your answer">
+            <button
+              type="button"
+              className="primary"
+              onClick={onCopyImage}
+              disabled={copying !== null || doc.relations.length === 0}
+              title={doc.relations.length === 0 ? 'Create a table first' : 'Copy the diagram as an image, to paste into your answer'}
+            >
+              <Icon name="image" />
+              {copying === 'image' ? 'Copying…' : 'Copy image'}
+            </button>
+            <button type="button" onClick={onCopyData} disabled={copying !== null} title="Copy the diagram as text (JSON)">
+              <Icon name="data" />
+              {copying === 'data' ? 'Copying…' : 'Copy data'}
+            </button>
+          </div>
           {saveStatus !== 'ok' && (
             <span className="save-warning" role="status">
               {saveStatus === 'failed' ? 'Could not keep a copy for reload' : 'Reload recovery unavailable in this browser'}
@@ -160,6 +224,15 @@ export function App() {
               <Icon name="redo" />
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setClearOpen(true)}
+            disabled={doc.relations.length === 0 && doc.sourceFields.length === 0}
+            title="Start again with an empty diagram"
+          >
+            <Icon name="file" />
+            New
+          </button>
           <button type="button" onClick={() => setHelpOpen(true)}>
             <Icon name="help" />
             Help
@@ -195,6 +268,26 @@ export function App() {
       )}
 
       {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
+      {clearOpen && (
+        <ClearDialog
+          hasFields={doc.sourceFields.length > 0}
+          onClose={() => setClearOpen(false)}
+          onClear={(keepFields) =>
+            dispatch({
+              type: 'command',
+              command: { type: 'clearDocument', keepFields },
+              after: {
+                operation: { kind: 'select' },
+                selection: { kind: 'none' },
+                selectedFieldIds: [],
+                editing: null,
+                viewport: DEFAULT_VIEWPORT,
+                message: { kind: 'info', text: 'New diagram. Undo brings the previous one back.' },
+              },
+            })
+          }
+        />
+      )}
     </div>
   )
 }

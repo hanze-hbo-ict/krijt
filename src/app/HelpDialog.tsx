@@ -118,10 +118,22 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           </li>
           <li>Scroll to pan, pinch to zoom, or use the zoom buttons. The fit button shows the whole diagram.</li>
         </ul>
+        <h3>Handing in</h3>
+        <ul>
+          <li>
+            <strong>Copy image</strong> puts the diagram on the clipboard as a picture: only the tables, notation and references, on white.
+            Paste it into your answer and check that it arrived; Krijt only reports success when the browser confirms the copy.
+          </li>
+          <li>
+            <strong>Copy data</strong> copies the diagram as text (JSON), for when text answers are allowed. Krijt cannot load it back.
+          </li>
+          <li>Krijt never downloads or uploads files.</li>
+        </ul>
         <h3>Your work</h3>
         <p>
           Krijt keeps a copy of your work in this browser tab only, so a reload restores it. Closing the tab, a browser crash, another
-          device or the exam environment can lose it. It is not a saved file. Undo history does not survive a reload.
+          device or the exam environment can lose it. It is not a saved file. Undo history does not survive a reload.{' '}
+          <strong>New</strong> starts an empty diagram (undo brings the old one back until you reload).
         </p>
       </div>
     </dialog>

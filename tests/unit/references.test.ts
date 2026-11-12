@@ -143,10 +143,32 @@ describe('reference geometry', () => {
     const l = layoutRelation(levering, m)
     const x1 = l.cells[1]!.x + M.braceInset
     const x2 = l.cells[2]!.x + l.cells[2]!.width - M.braceInset
-    // Levering is below Regel: its brace sits above the strip, tip up.
-    expect(g!.braces[0]).toBe(bracePath(x1, x2, l.y - M.braceGap, -1))
-    expect(g!.points[0]).toEqual({ x: (x1 + x2) / 2, y: l.y - M.braceGap - M.braceDepth })
+    // Levering is below Regel: its brace sits above the strip, tip up. The ends overlap, so the connector is one
+    // straight vertical line, with the tips moved towards each other (no jog).
+    const tipY = l.y - M.braceGap - M.braceDepth
+    expect(g!.points).toHaveLength(2)
+    expect(g!.points[0]!.y).toBe(tipY)
+    expect(g!.points[0]!.x).toBe(g!.points[1]!.x)
+    expect(g!.braces[0]).toBe(bracePath(x1, x2, l.y - M.braceGap, -1, M.braceDepth, g!.points[0]!.x))
+    expect(Math.abs(g!.points[0]!.x - (x1 + x2) / 2)).toBeLessThanOrEqual((x2 - x1) / 4)
     expect(g!.dots).toEqual([])
+  })
+
+  it('keeps the bend when the ends do not overlap horizontally', () => {
+    const doc = docWith([rel('a', ['p'], 0, 0), rel('c', ['s'], 400, 250)], [ref('x', ['c', ['c.s']], ['a', ['a.p']])])
+    const [g] = geometryOf(doc)
+    expect(g!.points).toHaveLength(4)
+  })
+
+  it('centres the tips when the ends already line up', () => {
+    const doc = docWith([rel('a', ['p', 'q'], 0, 0), rel('c', ['p', 'q'], 0, 250)], [ref('x', ['c', ['c.p', 'c.q']], ['a', ['a.p', 'a.q']])])
+    const [g] = geometryOf(doc)
+    const l = layoutRelation(doc.relations[1]!, m)
+    const mid = (l.cells[0]!.x + M.braceInset + l.cells[1]!.x + l.cells[1]!.width - M.braceInset) / 2
+    expect(g!.points).toEqual([
+      { x: mid, y: l.y - M.braceGap - M.braceDepth },
+      { x: mid, y: 34 + M.braceGap + M.braceDepth },
+    ])
   })
 
   it('spans a non-adjacent group and marks its members with dots', () => {

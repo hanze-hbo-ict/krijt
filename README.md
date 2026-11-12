@@ -7,8 +7,9 @@ Krijt is an expression tool, not a normalization tutor: it never proposes tables
 It is in the same family as [Kopje](https://kopje.pages.dev) and Krash and takes its styling from Krash's design tokens
 (`src/styles/tokens.css`). There is no backend, no account, no telemetry and no network access at runtime.
 
-The product specification is [PLAN.md](PLAN.md). **Status: Milestone 3** (references: single and composite
-foreign keys with braces, orthogonal connectors that follow their cells). Clipboard export (M4) is not built yet.
+The product specification is [PLAN.md](PLAN.md). **Status: Milestone 4** (clipboard export and exam hardening).
+All v1 features are built. The release gate that remains is a manual one: a real PNG paste into an answer field in
+the actual exam browser (see "Release gate" below).
 
 ## Quick start
 
@@ -106,7 +107,47 @@ so deletion needs no confirmation.
 and refused operations appear over the top of the canvas.
 
 **Canvas and recovery**: scroll to pan, pinch to zoom, zoom buttons, 100% and Fit. The document, viewport and sidebar
-width are saved to `sessionStorage` and restored on reload in the same tab; corrupt data starts an empty diagram.
+width are saved to `sessionStorage` (debounced, and at once when the tab is hidden or the page unloads, so a change
+right before a reload is kept) and restored on reload in the same tab. Corrupt or incompatible data starts an empty
+diagram and says so.
+
+**Handing in** (header, always visible):
+
+- **Copy image** puts a PNG of the diagram on the clipboard: tables, notation, table names, connectors and braces in
+  dark ink on opaque white, cropped to the content plus a 24-unit margin, at 2× (smaller only for very large
+  diagrams, within browser canvas limits). No grid, header bands, grips, + cells, selection or end marks. Success is
+  shown only after the browser confirms the write; a blocked, unsupported or insecure clipboard, or a failed render,
+  gives a specific message and nothing claims success. There is no download fallback. Disabled while there are no
+  tables.
+- **Copy data** puts the complete versioned `KrijtDocument` on the clipboard as indented JSON text with a fixed key
+  order (same diagram, same text). No UI state. Export only: there is no import.
+- **New** asks for confirmation, then clears the diagram (optionally keeping the form fields). It is one undo step;
+  the recovery copy follows the cleared state.
+
+### Demo scenario (Milestone 4 acceptance)
+
+1. Build a normalization answer with clicks only (Milestones 1–3): tables, keys, nullable/calculated marks, one simple
+   and one composite reference.
+2. **Copy image**, paste into the answer field (or any image-accepting editor) and check that all notation is legible:
+   bold underlined keys, superscript `o`, `/`, braces at both ends, arrowheads.
+3. Reload the tab: the diagram is restored.
+
+Automated in `tests/unit/export.test.ts` (scene, scale limits, clipboard results with fake browser objects, JSON,
+New, recovery status) and `tests/e2e/milestone4.spec.ts`: in Chromium a real clipboard round trip (the PNG is read
+back and checked for size, opaque white corners, ink and the absence of selection colours; the JSON is read back and
+compared), and in every browser a blocked and an unsupported clipboard, New diagram, corrupt recovery data, a change
+right before reload, and a 25-field / 10-table / 12-reference diagram whose interactions each stay under one second.
+
+### Release gate (manual)
+
+Clipboard behaviour in a locked-down exam browser cannot be tested from here. Before relying on Krijt in an exam:
+
+1. Open the deployed (https) Krijt in the actual exam/lockdown browser and the actual answer type.
+2. Build a small diagram with every notation, **Copy image**, paste into the answer field, submit a test answer and view
+   it as a grader. Check legibility at the size the grader sees.
+3. Repeat with **Copy data** if text answers are allowed.
+4. If the clipboard is blocked, Krijt says so; report the limitation. Do not add a download or upload path without a
+   deliberate change to the requirements.
 
 ### Demo scenario (Milestone 3 acceptance)
 
@@ -145,12 +186,13 @@ src/
   canvas/       Canvas.tsx (SVG, hit testing, previews, pan/zoom, drags, inline editors), RelationView.tsx (one strip),
                 ReferenceView.tsx (one connector)
   inventory/    Sidebar.tsx (form fields, field drag source)
+  clipboard/    scene.ts (export picture as drawing operations), paint.ts (canvas + PNG), clipboard.ts (writes, errors)
   persistence/  session.ts (versioned sessionStorage)
   components/   Icon, Splitter, InlineInput
   app/          App.tsx (shell, shortcuts), ContextBar.tsx (tools, context bar, messages), HelpDialog.tsx
 tests/
-  unit/         commands, attributes, geometry, state machine, operations + history, references, session recovery
-  e2e/          Playwright workflows (app.spec.ts: M1, milestone2.spec.ts: M2, milestone3.spec.ts: M3)
+  unit/         commands, attributes, geometry, state machine, operations + history, references, export, session recovery
+  e2e/          Playwright workflows (app.spec.ts: M1, milestone2.spec.ts … milestone4.spec.ts: M2–M4)
 ```
 
 **Document.** `KrijtDocument` (`src/model/types.ts`) is the plan's model, unchanged, and the single source of truth.
@@ -228,17 +270,30 @@ E2E hook fails any test that triggers a request to another host.
 - **Key hints in filled buttons** (Next/Finish) were unreadable (white on the light key background); fixed for M2's
   Next as well.
 
-## Risks and open points for Milestone 4
+- **Export (M4)** is drawn on a 2D canvas from a pure scene (`exportScene`), built from the same `layoutRelation` /
+  `layoutReferences` and measurer as the screen, rather than by serializing the on-screen SVG; this needs no font
+  embedding and guarantees no editor chrome leaks in. Table names sit above the strip, left-aligned.
+- **Clipboard timing**: the image write starts synchronously in the click with the PNG as a promise in
+  `ClipboardItem` (required by Safari); if a browser rejects that for a reason other than permission, it retries once
+  with the finished blob.
+- **Straight connectors**: when two ends lie one above the other and overlap horizontally, the connector is a single
+  straight line; each end's contact point (or brace tip) may move up to a quarter of its width from the centre.
+- **Narrow selection bar**: below about 1180px of bar width, Move to… / Copy to… / Reference from… / Delete show only
+  their icons (names and tooltips remain); below about 860px also Rename and the notation samples.
+- **Shortcuts are off while a dialog is open**, checked in the DOM (React state lags behind the dialog's close event).
+- **No `beforeunload` warning** on closing the tab: lockdown browsers and test runners handle it unpredictably, and a
+  reload already restores the work.
 
+## Risks and open points for Milestone 5
+
+- **Release gate**: a real paste in the exam browser (above) is still to be done. Firefox supports image clipboard
+  writes only from version 127.
 - **Routing is per reference** and ignores other tables: a connector can cross an unrelated table or its header band
   (it then wins clicks there; the header's grip end stays clickable), and an end on a strip's top edge sits in the
   header band, where a brace can overlap the grip or the start of a long table name. Students can rearrange tables;
   better routing is a Milestone 5 item if real diagrams need it.
-- **Export** must draw connectors in diagram ink on white (on screen they use `--diagram-connector`, light in dark
-  mode) and skip the selection halo and end marks.
-- **Text measurement**: widths come from canvas `measureText` with the system font stack (no bundled font). On-screen and
-  PNG output share the measurer, but the font differs per OS, so exports will vary slightly between machines. Bundling a
-  font would make output identical; decide before Milestone 4.
+- **Text measurement**: widths come from canvas `measureText` with the system font stack (no bundled font). Screen and
+  PNG share the measurer and the font, so a picture is always consistent in itself, but pictures differ slightly
+  between operating systems. Bundling a font would make them identical, if graders ever need that.
 - **Firefox E2E** has not run in this environment (the headless browser cannot start inside the tool sandbox here);
   Chromium and WebKit pass. Run `npx playwright test --project=firefox` locally or rely on CI.
-- **Clipboard (M4)** is untested in the target exam browser. That remains the release gate.

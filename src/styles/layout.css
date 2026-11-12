@@ -99,6 +99,14 @@ textarea:focus-visible {
   color: inherit;
   opacity: 0.85;
 }
+.danger {
+  background: var(--stop-bg);
+  border-color: var(--stop-bg);
+  color: var(--stop-ink);
+}
+.danger:hover:enabled {
+  background: var(--stop-hover);
+}
 .danger-quiet {
   color: var(--error);
 }
@@ -217,6 +225,13 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.copy-actions {
+  display: flex;
+  gap: 6px;
+  padding-right: 10px;
+  margin-right: 2px;
+  border-right: 1px solid var(--line);
 }
 .save-warning {
   color: var(--error);
@@ -407,6 +422,19 @@ textarea:focus-visible {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
+  container-type: inline-size;
+}
+/* Long selection bars: drop secondary button texts first (icons, names and tooltips remain), then samples. */
+@container (max-width: 1180px) {
+  .collapsible:not(.narrow) {
+    display: none;
+  }
+}
+@container (max-width: 860px) {
+  .collapsible.narrow,
+  .context-bar .notation-sample {
+    display: none;
+  }
 }
 .context-bar:not([data-operation='select']) {
   background: var(--soft);
@@ -982,6 +1010,19 @@ textarea:focus-visible {
 }
 .dialog-body p {
   margin: 0;
+}
+.confirm-dialog {
+  width: min(480px, calc(100vw - 32px));
+}
+.confirm-dialog .dialog-body {
+  padding-top: 14px;
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
 }
 
 @media (max-width: 720px) {

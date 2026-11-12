@@ -23,6 +23,7 @@ import { addAttributesFromNames } from '../commands/builders'
 import { orderAttributeIds } from '../commands/commands'
 import { Icon } from '../components/Icon'
 import { InlineInput } from '../components/InlineInput'
+import { toValidName, typedName } from '../model/names'
 import { contentBounds, layoutRelation, METRICS, type RelationLayout, type TextMeasurer } from '../geometry/layout'
 import { layoutReferences } from '../geometry/references'
 import { fitToBounds, panBy, screenToWorld, zoomAt, type Viewport } from '../geometry/viewport'
@@ -435,9 +436,11 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
               initial={r.name ?? ''}
               label="Table name (leave empty for an unnamed table)"
               placeholder="Table name"
+              sanitize={typedName}
               onCommit={(value) => {
                 dispatch({ type: 'ui', patch: { editing: null } })
-                if ((value.trim() || null) !== r.name) dispatch({ type: 'command', command: { type: 'renameRelation', relationId: r.id, name: value } })
+                const name = toValidName(value) || null
+                if (name !== r.name) dispatch({ type: 'command', command: { type: 'renameRelation', relationId: r.id, name } })
               }}
               onCancel={() => dispatch({ type: 'ui', patch: { editing: null } })}
             />
@@ -457,8 +460,10 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
               repeat
               label="New attribute name (Enter adds it, Escape closes)"
               placeholder="Attribute name"
+              sanitize={typedName}
               onCommit={(value) => {
-                const command = addAttributesFromNames(editing.relationId, [value.trim()])
+                const name = toValidName(value)
+                const command = name ? addAttributesFromNames(editing.relationId, [name]) : null
                 if (command) dispatch({ type: 'command', command })
               }}
               onCancel={() => dispatch({ type: 'ui', patch: { editing: null } })}
@@ -479,10 +484,11 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
               style={screenRect(cell.x, r.position.y, Math.max(cell.width, 160), METRICS.cellHeight)}
               initial={a.name}
               label={`Rename attribute ${a.name}`}
+              sanitize={typedName}
               onCommit={(value) => {
                 dispatch({ type: 'ui', patch: { editing: null } })
-                if (value.trim() !== '' && value.trim() !== a.name)
-                  dispatch({ type: 'command', command: { type: 'renameAttribute', attributeId: a.id, name: value } })
+                const name = toValidName(value)
+                if (name !== '' && name !== a.name) dispatch({ type: 'command', command: { type: 'renameAttribute', attributeId: a.id, name } })
               }}
               onCancel={() => dispatch({ type: 'ui', patch: { editing: null } })}
             />

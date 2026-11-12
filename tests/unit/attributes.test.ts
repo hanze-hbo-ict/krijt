@@ -1,5 +1,6 @@
 /** Milestone 2 commands: attribute editing, notation flags, ordering, move, copy, delete. */
 import { describe, expect, it } from 'vitest'
+import { NAME_RULE } from '../../src/model/names'
 import { applyCommand, orderAttributeIds, type Command } from '../../src/commands/commands'
 import { copyAttributes, moveAttributes } from '../../src/commands/builders'
 import { emptyDocument, newAttribute, type KrijtDocument, type Reference, type Relation } from '../../src/model/types'
@@ -34,10 +35,11 @@ const ref = (id: string, from: [string, string[]], to: [string, string[]]): Refe
 })
 
 describe('rename and flags', () => {
-  it('renames an attribute, trimming but otherwise verbatim', () => {
+  it('renames an attribute, trimming but otherwise verbatim, and refuses names with other characters', () => {
     const doc = docWith([rel('A', ['x'])])
-    const { doc: next } = apply(doc, { type: 'renameAttribute', attributeId: 'A.x', name: '  Prijs (€) ' })
-    expect(names(next, 'A')).toEqual(['Prijs (€)'])
+    const { doc: next } = apply(doc, { type: 'renameAttribute', attributeId: 'A.x', name: '  Prijs-incl_btw ' })
+    expect(names(next, 'A')).toEqual(['Prijs-incl_btw'])
+    expect(applyCommand(doc, { type: 'renameAttribute', attributeId: 'A.x', name: 'Prijs (€)' })).toEqual({ ok: false, error: NAME_RULE })
     expect(applyCommand(doc, { type: 'renameAttribute', attributeId: 'A.x', name: ' ' }).ok).toBe(false)
     expect(applyCommand(doc, { type: 'renameAttribute', attributeId: 'nope', name: 'y' }).ok).toBe(false)
   })

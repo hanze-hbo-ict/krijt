@@ -15,11 +15,13 @@ interface Props {
   className?: string
   style?: CSSProperties
   repeat?: boolean
+  /** Rewrites the text as it is typed (not during IME composition), e.g. to keep names valid. */
+  sanitize?: (text: string) => string
   onCommit: (value: string) => void
   onCancel: () => void
 }
 
-export function InlineInput({ initial, label, placeholder, className, style, repeat, onCommit, onCancel }: Props) {
+export function InlineInput({ initial, label, placeholder, className, style, repeat, sanitize, onCommit, onCancel }: Props) {
   const [value, setValue] = useState(initial)
   const ref = useRef<HTMLInputElement>(null)
   const done = useRef(false)
@@ -40,7 +42,11 @@ export function InlineInput({ initial, label, placeholder, className, style, rep
       maxLength={MAX_TEXT_LENGTH}
       spellCheck={false}
       autoComplete="off"
-      onChange={(e) => setValue(e.target.value)}
+      onChange={(e) => {
+        const composing = (e.nativeEvent as InputEvent).isComposing
+        setValue(sanitize && !composing ? sanitize(e.target.value) : e.target.value)
+      }}
+      onCompositionEnd={(e) => sanitize && setValue(sanitize(e.currentTarget.value))}
       onKeyDown={(e) => {
         e.stopPropagation()
         if (e.key === 'Enter') {

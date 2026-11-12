@@ -242,3 +242,28 @@ test('a realistic exam diagram (25 fields, 10 tables, 12 references) stays respo
   for (const t of times) expect(t).toBeLessThan(1000)
   await expect(canvas(page)).toBeVisible()
 })
+
+test('names accept letters of any script, dashes and underscores; typing a space gives an underscore', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Paste a list of fields' }).click()
+  await page.getByLabel('One field per line').fill('Datum (dd-mm)\nΑριθμός πελάτη')
+  await page.getByRole('button', { name: /^Add \d+ fields$/ }).click()
+  const list = page.getByRole('list', { name: 'Form fields' })
+  await list.getByRole('button', { name: 'Datum (dd-mm)', exact: true }).click()
+  await list.getByRole('button', { name: 'Αριθμός πελάτη', exact: true }).click()
+  await page.getByRole('button', { name: 'Place in diagram' }).click()
+  await canvas(page).click({ position: { x: 60, y: 80 } })
+  // Labels with spaces and punctuation become valid names; the form fields keep their text.
+  await expect(page.locator('.cell[aria-label^="Attribute Datum_dd-mm in"]')).toHaveCount(1)
+  await expect(page.locator('.cell[aria-label^="Attribute Αριθμός_πελάτη in"]')).toHaveCount(1)
+  await expect(list.getByRole('button', { name: 'Datum (dd-mm)', exact: true })).toBeVisible()
+
+  // Typing a name: spaces become underscores, characters that are not allowed do not appear; on Enter, repeated
+  // underscores become one.
+  await page.getByRole('button', { name: 'Name table' }).click()
+  const input = page.getByLabel('Table name (leave empty for an unnamed table)')
+  await input.pressSequentially('Klant gegevens (€) 2-a')
+  await expect(input).toHaveValue('Klant_gegevens__2-a')
+  await input.press('Enter')
+  await expect(page.locator('.relation-name')).toHaveText('Klant_gegevens_2-a')
+})

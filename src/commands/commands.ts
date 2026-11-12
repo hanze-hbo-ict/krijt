@@ -10,6 +10,7 @@
  * Commands check structural preconditions only (things exist, IDs are unique,
  * references stay well-formed). They never apply normalization rules.
  */
+import { isValidName, NAME_RULE } from '../model/names'
 import type { Attribute, Id, KrijtDocument, Point, Reference, ReferenceEnd, Relation, SourceField } from '../model/types'
 
 export type AttributeFlag = 'primaryKey' | 'nullable' | 'calculated'
@@ -292,9 +293,12 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
       const r = cmd.relation
       if (r.attributes.length === 0) return fail('A table needs at least one attribute.')
       if (!freshIds(doc, [r.id, ...r.attributes.map((a) => a.id)])) return fail('IDs are not unique.')
+      const tableName = normalizeName(r.name)
+      if (tableName !== null && !isValidName(tableName)) return fail(NAME_RULE)
+      if (!r.attributes.every((a) => isValidName(a.name))) return fail(NAME_RULE)
       const relation: Relation = {
         id: r.id,
-        name: normalizeName(r.name),
+        name: tableName,
         position: { ...r.position },
         attributes: r.attributes.map((a) => ({ ...a })),
       }
@@ -303,6 +307,7 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
     case 'addAttributes': {
       if (cmd.attributes.length === 0) return fail('No attributes to add.')
       if (!freshIds(doc, cmd.attributes.map((a) => a.id))) return fail('Attribute IDs are not unique.')
+      if (!cmd.attributes.every((a) => isValidName(a.name))) return fail(NAME_RULE)
       const next = mapRelation(doc, cmd.relationId, (r) => {
         const attributes = [...r.attributes]
         const at = cmd.index === undefined ? undefined : snapIndex(referenceBlocks(doc, r.id), cmd.index)
@@ -312,7 +317,9 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
       return next ? ok(next) : fail('That table no longer exists.')
     }
     case 'renameRelation': {
-      const next = mapRelation(doc, cmd.relationId, (r) => ({ ...r, name: normalizeName(cmd.name) }))
+      const name = normalizeName(cmd.name)
+      if (name !== null && !isValidName(name)) return fail(NAME_RULE)
+      const next = mapRelation(doc, cmd.relationId, (r) => ({ ...r, name }))
       return next ? ok(next) : fail('That table no longer exists.')
     }
     case 'moveRelation': {
@@ -334,6 +341,7 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
     case 'renameAttribute': {
       const name = cmd.name.trim()
       if (name === '') return fail('An attribute needs a name.')
+      if (!isValidName(name)) return fail(NAME_RULE)
       let found = false
       const relations = doc.relations.map((r) =>
         r.attributes.some((a) => a.id === cmd.attributeId)

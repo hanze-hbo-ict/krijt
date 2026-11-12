@@ -109,6 +109,10 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
             Move a table with <strong>Move table</strong> and a click, by dragging its header band, or with the arrow keys.
           </li>
           <li>Click <strong>+</strong> after the last attribute to type new attributes.</li>
+          <li>
+            Names may contain letters (any language), digits, dashes and underscores. A space becomes an underscore; form fields are converted
+            when placed (“Datum (dd-mm)” becomes “Datum_dd-mm”).
+          </li>
         </ul>
         <h3>Undo and canvas</h3>
         <ul>

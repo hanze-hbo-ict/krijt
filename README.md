@@ -94,6 +94,12 @@ operation needs a modifier key.
   renamed or moved together to another table. Deleting an attribute or table deletes its references in the same undo
   step, with a message.
 
+**Names**: table and column names may contain only letters, marks and digits of any script (accents, Greek,
+Cyrillic, … included), dashes (Unicode Pd: `-`, `–`, `—`) and connectors (Unicode Pc: `_`). While typing a name, a
+space becomes an underscore and other characters are left out; commands refuse invalid names. Form-field labels
+stay free text; placing a field converts its label (each run of other characters becomes one underscore, repeated
+underscores become one and outer ones are dropped; typed dashes stay: `Datum (dd-mm)` → `Datum_dd-mm`). Names from sessions made before this rule still load.
+
 **Tables**: click the header band to select; **Name table / Rename table** (empty = unnamed), **Add attribute**, **Move
 table** (then click), **Select all attributes**, **Delete table**. Tables also move by dragging the header band or with
 the arrow keys.
@@ -239,6 +245,8 @@ E2E hook fails any test that triggers a request to another host.
 
 ## Deviations from the plan and decisions
 
+- **Restricted names** (not in the plan): letters, digits, dashes and underscores only. Form-field labels stay
+  free text and are converted when placed.
 - **Reference ends are adjacent, ordered units** (plan §4.3 asks for a documented rule; this follows the course
   convention and deliberately narrows plan §2, which allowed non-adjacent ends). Ends must be side by side when the
   reference is made, pair up left to right, and every edit keeps them that way: shifting reorders inside the end or

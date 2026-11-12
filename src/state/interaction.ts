@@ -13,6 +13,7 @@ import {
   type DestinationIntent,
 } from '../commands/builders'
 import { expandToUnits, referenceBlocks, referenceProblem, snapIndex } from '../commands/commands'
+import { toValidName } from '../model/names'
 import type { Id, KrijtDocument, Point, Reference, ReferenceEnd } from '../model/types'
 import { METRICS } from '../geometry/layout'
 import { commonRelation, NO_SELECTION, SELECT, selectedAttributeIds, type Action, type AppState, type Selection } from './appState'
@@ -36,6 +37,7 @@ export function newTablePosition(point: Point): Point {
 }
 
 export const NO_FIELDS_MESSAGE = 'Select one or more form fields in the sidebar first.'
+export const NO_NAME_IN_FIELDS_MESSAGE = 'Those form fields contain no letters or digits to use as a name.'
 
 /**
  * The destination a click on `target` stands for: before/after a cell,
@@ -57,8 +59,11 @@ export function destinationFor(doc: KrijtDocument, target: CanvasTarget, point: 
 
 /** Placing the selected source fields at a target. Shared by Place mode and sidebar drops. */
 export function placeAction(state: AppState, fieldIds: Id[], target: CanvasTarget, point: Point): Action | null {
-  const names = orderedFieldLabels(state.doc, fieldIds)
-  if (names.length === 0) return { type: 'ui', patch: { message: { kind: 'error', text: NO_FIELDS_MESSAGE } } }
+  const labels = orderedFieldLabels(state.doc, fieldIds)
+  if (labels.length === 0) return { type: 'ui', patch: { message: { kind: 'error', text: NO_FIELDS_MESSAGE } } }
+  // Form-field labels are free text; as attribute names they keep only letters, digits, dashes and underscores.
+  const names = labels.map(toValidName).filter((n) => n !== '')
+  if (names.length === 0) return { type: 'ui', patch: { message: { kind: 'error', text: NO_NAME_IN_FIELDS_MESSAGE } } }
   const intent = destinationFor(state.doc, target, point)
   if (!intent) return null
   const destination = toDestination(intent)

@@ -54,7 +54,9 @@ export function renderPng(scene: Scene, scale: number): Promise<Blob> {
     const canvas = document.createElement('canvas')
     canvas.width = Math.max(1, Math.round(scene.bounds.width * scale))
     canvas.height = Math.max(1, Math.round(scene.bounds.height * scale))
-    const ctx = canvas.getContext('2d', { alpha: false })
+    // Not { alpha: false }: an opaque canvas lets Chromium use coloured LCD (subpixel) text anti-aliasing, which
+    // leaves colour fringes in an image meant to be dark on white. The white fill in paintScene makes it opaque.
+    const ctx = canvas.getContext('2d')
     if (!ctx) {
       reject(new Error('the browser could not create a drawing surface'))
       return

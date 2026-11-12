@@ -12,8 +12,10 @@ interface Props {
   layout: RelationLayout
   measurer: TextMeasurer
   selected: boolean
-  selectedAttributeId: string | null
-  /** A placement or move operation is active: the whole table is a destination. */
+  selectedAttributeIds: ReadonlySet<string>
+  /** Attributes being dragged (shown dimmed at their origin). */
+  draggedAttributeIds: ReadonlySet<string>
+  /** A destination is being chosen: the whole table is a destination. */
   destination: boolean
   dragging: boolean
 }
@@ -47,7 +49,16 @@ function Grip({ x, y }: { x: number; y: number }) {
   return <g className="grip">{dots}</g>
 }
 
-export const RelationView = memo(function RelationView({ relation, layout, measurer, selected, selectedAttributeId, destination, dragging }: Props) {
+export const RelationView = memo(function RelationView({
+  relation,
+  layout,
+  measurer,
+  selected,
+  selectedAttributeIds,
+  draggedAttributeIds,
+  destination,
+  dragging,
+}: Props) {
   const { header, cells } = layout
   const textY = layout.y + METRICS.cellHeight / 2 + METRICS.fontSize * 0.35
   const label = relationLabel(relation)
@@ -110,7 +121,7 @@ export const RelationView = memo(function RelationView({ relation, layout, measu
 
       {relation.attributes.map((a, i) => {
         const c = cells[i]!
-        const isSel = a.id === selectedAttributeId
+        const isSel = selectedAttributeIds.has(a.id)
         const w = labelWidth(labelParts(a), measurer)
         return (
           <g
@@ -120,6 +131,7 @@ export const RelationView = memo(function RelationView({ relation, layout, measu
             data-relation={relation.id}
             data-attribute={a.id}
             data-selected={isSel || undefined}
+            data-dragged={draggedAttributeIds.has(a.id) || undefined}
             role="button"
             tabIndex={0}
             aria-pressed={isSel}
@@ -127,7 +139,13 @@ export const RelationView = memo(function RelationView({ relation, layout, measu
           >
             <rect className="cell-box" x={c.x} y={layout.y} width={c.width} height={layout.height} />
             <AttributeText attribute={a} x={c.x + (c.width - w) / 2} y={textY} measurer={measurer} />
-            {isSel && <rect className="cell-selection" x={c.x + 2.5} y={layout.y + 2.5} width={c.width - 5} height={layout.height - 5} />}
+            {isSel && (
+              <>
+                <rect className="cell-selection" x={c.x + 2.5} y={layout.y + 2.5} width={c.width - 5} height={layout.height - 5} />
+                {/* A corner tick, so selection is not shown by colour alone. */}
+                <path className="cell-tick" d={`M${c.x + 2.5} ${layout.y + 11}V${layout.y + 2.5}H${c.x + 11}Z`} />
+              </>
+            )}
           </g>
         )
       })}

@@ -12,6 +12,13 @@ const PATHS: Record<string, string[]> = {
   fit: ['M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'],
   list: ['M8 6h12M8 12h12M8 18h12', 'M4 6h.01M4 12h.01M4 18h.01'],
   tag: ['M4 4h7l9 9-7 7-9-9V4Z', 'M8 8h.01'],
+  undo: ['M9 14 4 9l5-5', 'M4 9h11a5 5 0 0 1 0 10h-3'],
+  redo: ['m15 14 5-5-5-5', 'M20 9H9a5 5 0 0 0 0 10h3'],
+  pointer: ['M5 3l14 7-6 2-2 6-6-15Z'],
+  multi: ['M3 8h6v6H3z', 'M11 8h6v6h-6z', 'M5 11l1 1 2-2', 'M13 11l1 1 2-2', 'M19 8h2v6h-2'],
+  copy: ['M9 9h10v11H9z', 'M15 9V5a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3'],
+  left: ['M15 6l-6 6 6 6'],
+  right: ['M9 6l6 6-6 6'],
 }
 
 export function Icon({ name, size }: { name: keyof typeof PATHS | string; size?: number }) {

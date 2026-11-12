@@ -228,16 +228,16 @@ test('typing in a name field does not trigger shortcuts', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Move table' })).toBeVisible()
 })
 
-test('delete a table after confirmation', async ({ page }) => {
+test('delete a table and restore it with undo', async ({ page }) => {
   await pasteList(page, 'D')
   await placeOnCanvas(page, ['D'])
-  page.once('dialog', (d) => d.dismiss())
-  await page.getByRole('button', { name: 'Delete table' }).click()
-  await expect(page.locator('.relation')).toHaveCount(1)
-  page.once('dialog', (d) => d.accept())
+  const before = (await cell(page, 'D').boundingBox())!
   await page.getByRole('button', { name: 'Delete table' }).click()
   await expect(page.locator('.relation')).toHaveCount(0)
   await expect(fieldList(page).getByRole('listitem')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(page.locator('.relation')).toHaveCount(1)
+  expect((await cell(page, 'D').boundingBox())!.x).toBe(before.x)
 })
 
 test('a reload of the same tab restores the session', async ({ page }) => {

@@ -119,7 +119,7 @@ describe('selection state', () => {
     const r = s.doc.relations[0]!
     const t: CanvasTarget = { kind: 'attribute', relationId: r.id, attributeId: r.attributes[0]!.id }
     s = click(s, t)
-    expect(s.ui.selection).toEqual({ kind: 'attribute', relationId: r.id, attributeId: r.attributes[0]!.id })
+    expect(s.ui.selection).toEqual({ kind: 'attributes', attributeIds: [r.attributes[0]!.id] })
     s = click(s, t)
     expect(s.ui.selection.kind).toBe('none')
   })

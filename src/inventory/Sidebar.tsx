@@ -2,8 +2,13 @@
  * Form-field inventory. Just a list: no used/unused tracking, no checklist.
  * Fields are selected with plain clicks (no modifier keys) and placed into the
  * diagram as independent copies; placing never removes a field.
+ *
+ * Dragging fields onto the canvas is an optional shortcut for Place: it uses
+ * the same placeAction as clicking a destination in Place mode.
  */
-import { useState, type ClipboardEvent, type Dispatch } from 'react'
+import { useRef, useState, type ClipboardEvent, type Dispatch, type MutableRefObject, type PointerEvent as ReactPointerEvent } from 'react'
+import { DRAG_THRESHOLD, type CanvasHandle, type DragGhost } from '../canvas/Canvas'
+import { placeAction } from '../state/interaction'
 import { addSourceFields, parseFieldList } from '../commands/builders'
 import { Icon } from '../components/Icon'
 import { InlineInput } from '../components/InlineInput'
@@ -14,9 +19,11 @@ import type { Action, AppState } from '../state/appState'
 interface Props {
   state: AppState
   dispatch: Dispatch<Action>
+  canvasHandle: MutableRefObject<CanvasHandle | null>
+  onGhost: (ghost: DragGhost) => void
 }
 
-export function Sidebar({ state, dispatch }: Props) {
+export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
   const { doc, ui } = state
   const [entry, setEntry] = useState('')
   const [listOpen, setListOpen] = useState(false)
@@ -25,6 +32,50 @@ export function Sidebar({ state, dispatch }: Props) {
   const selected = new Set(ui.selectedFieldIds)
   const placing = ui.operation.kind === 'place'
   const count = ui.selectedFieldIds.length
+  const stateRef = useRef(state)
+  stateRef.current = state
+  /** Set after a drag ends, so the click that follows pointerup does not toggle the field. */
+  const suppressClick = useRef(false)
+
+  const startFieldPress = (e: ReactPointerEvent, fieldId: string) => {
+    if (e.button !== 0) return
+    const start = { x: e.clientX, y: e.clientY }
+    let dragging: string[] | null = null
+    const onMove = (ev: PointerEvent) => {
+      if (!dragging) {
+        if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_THRESHOLD) return
+        // Dragging a selected field drags all selected fields; otherwise just that one.
+        const sel = stateRef.current.ui.selectedFieldIds
+        dragging = sel.includes(fieldId) ? [...sel] : [fieldId]
+      }
+      onGhost({ text: dragging.length === 1 ? 'Place 1 field' : `Place ${dragging.length} fields`, x: ev.clientX, y: ev.clientY })
+      canvasHandle.current?.previewAt(ev.clientX, ev.clientY, dragging.length)
+    }
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      if (!dragging) return
+      suppressClick.current = true
+      setTimeout(() => (suppressClick.current = false), 0)
+      onGhost(null)
+      canvasHandle.current?.clearPreview()
+      const hit = canvasHandle.current?.hitTest(ev.clientX, ev.clientY)
+      if (!hit) return
+      const action = placeAction(stateRef.current, dragging, hit.target, hit.point)
+      if (action) dispatch(action)
+    }
+    const onCancel = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      onGhost(null)
+      canvasHandle.current?.clearPreview()
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+  }
 
   const add = (labels: string[]) => {
     const command = addSourceFields(labels)
@@ -133,7 +184,10 @@ export function Sidebar({ state, dispatch }: Props) {
                 field={f}
                 selected={selected.has(f.id)}
                 editing={editingId === f.id}
-                onToggle={() => dispatch({ type: 'toggleField', fieldId: f.id })}
+                onToggle={() => {
+                  if (!suppressClick.current) dispatch({ type: 'toggleField', fieldId: f.id })
+                }}
+                onPress={(e) => startFieldPress(e, f.id)}
                 onEdit={() => setEditingId(f.id)}
                 onRename={(label) => {
                   setEditingId(null)
@@ -177,13 +231,14 @@ interface RowProps {
   selected: boolean
   editing: boolean
   onToggle: () => void
+  onPress: (e: ReactPointerEvent) => void
   onEdit: () => void
   onRename: (label: string) => void
   onCancelEdit: () => void
   onDelete: () => void
 }
 
-function FieldRow({ field, selected, editing, onToggle, onEdit, onRename, onCancelEdit, onDelete }: RowProps) {
+function FieldRow({ field, selected, editing, onToggle, onPress, onEdit, onRename, onCancelEdit, onDelete }: RowProps) {
   if (editing) {
     return (
       <li className="field-row editing">
@@ -199,7 +254,7 @@ function FieldRow({ field, selected, editing, onToggle, onEdit, onRename, onCanc
   }
   return (
     <li className="field-row" data-selected={selected || undefined}>
-      <button type="button" className="field-toggle" aria-pressed={selected} onClick={onToggle} onDoubleClick={onEdit}>
+      <button type="button" className="field-toggle" aria-pressed={selected} onClick={onToggle} onPointerDown={onPress} onDoubleClick={onEdit}>
         <span className="checkmark" aria-hidden="true">
           {selected && <Icon name="check" />}
         </span>

@@ -114,12 +114,34 @@ test.describe('real clipboard (Chromium)', () => {
     expect(png!.colored).toBeLessThan(50) // anti-aliasing only; no selection colours
   })
 
-  test('Copy data puts the versioned document on the clipboard as JSON text', async ({ page }) => {
+  test('Copy data puts the diagram on the clipboard as plain text', async ({ page }) => {
     await openWith(page, SAMPLE)
     await copyData(page).click()
     await expect(status(page)).toHaveText('Diagram data copied as text.')
     const text = await page.evaluate(() => navigator.clipboard.readText())
-    expect(JSON.parse(text)).toEqual(SAMPLE)
+    expect(text).toBe(
+      [
+        'Klant',
+        '  *klantnr*',
+        '  naam',
+        '',
+        '#1',
+        '  *ordernr*',
+        '  klantnr → Klant.klantnr',
+        '  totaal/°',
+        '',
+        'Regel',
+        '  *ordernr*',
+        '  *regelnr*',
+        '',
+        '#2',
+        '  ordernr',
+        '  regelnr',
+        '  datum',
+        '  (ordernr, regelnr) → Regel(ordernr, regelnr)',
+        '',
+      ].join('\n'),
+    )
   })
 })
 
@@ -153,9 +175,10 @@ test.describe('clipboard errors (all browsers)', () => {
     await expect(alert(page)).toHaveText(/cannot put images on the clipboard/)
   })
 
-  test('Copy image is unavailable for an empty diagram', async ({ page }) => {
+  test('Copy image and Copy data are unavailable for an empty diagram', async ({ page }) => {
     await page.goto('/')
     await expect(copyImage(page)).toBeDisabled()
+    await expect(copyData(page)).toBeDisabled()
   })
 })
 

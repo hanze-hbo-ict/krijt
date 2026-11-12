@@ -190,7 +190,12 @@ export function App() {
               <Icon name="image" />
               {copying === 'image' ? 'Copying…' : 'Copy image'}
             </button>
-            <button type="button" onClick={onCopyData} disabled={copying !== null} title="Copy the diagram as text (JSON)">
+            <button
+              type="button"
+              onClick={onCopyData}
+              disabled={copying !== null || doc.relations.length === 0}
+              title={doc.relations.length === 0 ? 'Create a table first' : 'Copy the diagram as plain text'}
+            >
               <Icon name="data" />
               {copying === 'data' ? 'Copying…' : 'Copy data'}
             </button>

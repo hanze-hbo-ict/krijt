@@ -12,9 +12,8 @@ import {
   type SceneOp,
 } from '../../src/clipboard/scene'
 import { contentBounds, estimateMeasurer as m, fontFor, layoutRelation } from '../../src/geometry/layout'
-import { documentForExport, serializeDocument } from '../../src/model/serialize'
+import { exportTables, serializeDocument } from '../../src/model/serialize'
 import { emptyDocument, newAttribute, type KrijtDocument, type Reference, type Relation } from '../../src/model/types'
-import { parseDocument } from '../../src/model/validate'
 import { readSession, SESSION_KEY, serializeSession } from '../../src/persistence/session'
 import { initialState, reducer } from '../../src/state/appState'
 
@@ -197,20 +196,87 @@ describe('copy data', () => {
     expect(await copyText({ isSecureContext: false, clipboard: { writeText: async () => undefined } }, 'x')).toMatchObject({ reason: 'insecure' })
   })
 
-  it('serializes the complete versioned document with a stable key order', () => {
+  it('describes the diagram as plain text: a block per table, *keys*, / and ° suffixes, references inline', () => {
+    expect(serializeDocument(sample())).toBe(
+      [
+        'Klant',
+        '  *klantnr*',
+        '  naam',
+        '',
+        '#1',
+        '  ordernr',
+        '  klantnr → Klant.klantnr',
+        '  totaal/°',
+        '',
+        '#2',
+        '  ordernr',
+        '  regelnr',
+        '',
+        '#3',
+        '  ordernr',
+        '  regelnr',
+        '  datum',
+        '  (ordernr, regelnr) → #2(ordernr, regelnr)',
+        '',
+      ].join('\n'),
+    )
+  })
+
+  it('has no UI state, layout, form fields or internal IDs, and gives the same text for the same diagram', () => {
     const doc = sample()
     const text = serializeDocument(doc)
-    expect(parseDocument(JSON.parse(text))).toEqual(doc)
-    // Same document with keys in a different order gives the same text.
-    const shuffled = JSON.parse(JSON.stringify(doc), (_k, v) =>
-      v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).reverse()) : v,
-    )
-    expect(serializeDocument(shuffled)).toBe(text)
-    expect(Object.keys(JSON.parse(text))).toEqual(['format', 'version', 'sourceFields', 'relations', 'references'])
-    expect(text.startsWith('{\n  "format": "krijt",\n  "version": 1,')).toBe(true)
-    // Nothing but the document: no UI state.
-    expect(documentForExport(doc)).toEqual(doc)
-    expect(text).not.toMatch(/viewport|selection|sidebar/)
+    expect(text).not.toMatch(/viewport|selection|sidebar|position/)
+    expect(text).not.toContain('Klantnr') // the form field (capitalised in the sample) is not exported
+    for (const r of doc.relations) for (const a of r.attributes) expect(text).not.toContain(a.id)
+    expect(serializeDocument(structuredClone(doc))).toBe(text)
+  })
+
+  it('suffixes repeated table and column names by occurrence, and numbers unnamed tables', () => {
+    const doc = docWith([rel('a', ['x'], 0, 0, 'Foo'), rel('b', ['x', 'x'], 0, 100), rel('c', ['y'], 0, 200, 'Foo'), rel('d', ['z'], 0, 300)])
+    doc.relations[1]!.attributes[1] = { ...doc.relations[1]!.attributes[1]!, id: 'b.x#2' }
+    doc.references = [ref('r', ['d', ['d.z']], ['b', ['b.x#2']])]
+    const out = exportTables(doc)
+    expect(out.map((t) => t.name)).toEqual(['Foo', '#1', 'Foo#2', '#2'])
+    expect(out[1]!.columns).toEqual(['x', 'x#2'])
+    expect(out[3]!.columns).toEqual(['z → #1.x#2'])
+  })
+
+  it('wraps keys in asterisks (duplicate suffix inside), then / and °, and never marks references', () => {
+    const t = rel('t', ['a', 'b', 'c', 'd', 'a'])
+    const set = (i: number, f: Partial<Record<'primaryKey' | 'nullable' | 'calculated', boolean>>) =>
+      (t.attributes[i] = { ...t.attributes[i]!, ...f })
+    set(0, { primaryKey: true, nullable: true, calculated: true })
+    set(1, { nullable: true })
+    set(2, { calculated: true })
+    set(4, { primaryKey: true })
+    t.attributes[4] = { ...t.attributes[4]!, id: 't.a#2' }
+    const u = rel('u', ['fk'], 0, 200)
+    const out = exportTables(docWith([t, u], [ref('r', ['u', ['u.fk']], ['t', ['t.a']])]))
+    expect(out[0]!.columns).toEqual(['*a*/°', 'b°', 'c/', 'd', '*a#2*'])
+    expect(out[1]!.columns).toEqual(['fk → #1.a'])
+  })
+
+  it('lists several single-column references from one column comma-separated, in order', () => {
+    const doc = docWith([rel('a', ['id'], 0, 0, 'A'), rel('b', ['id'], 0, 100, 'B'), rel('c', ['ref', 'other'], 0, 200, 'C')], [
+      ref('1', ['c', ['c.ref']], ['a', ['a.id']]),
+      ref('2', ['c', ['c.other']], ['a', ['a.id']]),
+      ref('3', ['c', ['c.ref']], ['b', ['b.id']]),
+    ])
+    const c = exportTables(doc)[2]!
+    expect(c.columns).toEqual(['ref → A.id, B.id', 'other → A.id'])
+    expect(c.references).toEqual([])
+  })
+
+  it('keeps the notation on the referencing column and writes composite references after the columns', () => {
+    const a = rel('a', ['p', 'q'], 0, 0, 'A')
+    const b = rel('b', ['x', 'y', 'z'], 0, 200, 'B')
+    b.attributes[0] = { ...b.attributes[0]!, primaryKey: true }
+    const doc = docWith([a, b], [ref('1', ['b', ['b.x']], ['a', ['a.p']]), ref('2', ['b', ['b.y', 'b.z']], ['a', ['a.p', 'a.q']])])
+    expect(serializeDocument(doc)).toBe('A\n  p\n  q\n\nB\n  *x* → A.p\n  y\n  z\n  (y, z) → A(p, q)\n')
+  })
+
+  it('is empty for a diagram without tables', () => {
+    expect(serializeDocument(emptyDocument())).toBe('')
   })
 })
 

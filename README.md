@@ -125,8 +125,39 @@ diagram and says so.
   shown only after the browser confirms the write; a blocked, unsupported or insecure clipboard, or a failed render,
   gives a specific message and nothing claims success. There is no download fallback. Disabled while there are no
   tables.
-- **Copy data** puts the complete versioned `KrijtDocument` on the clipboard as indented JSON text with a fixed key
-  order (same diagram, same text). No UI state. Export only: there is no import.
+- **Copy data** puts the diagram on the clipboard as plain text, meant to be understood by reading it:
+
+  ```text
+  Klant
+    *klantnr*
+    naam
+
+  #1
+    *ordernr*
+    klantnr → Klant.klantnr
+    totaal/°
+
+  Regel
+    *ordernr*
+    *regelnr*
+
+  #2
+    ordernr
+    regelnr
+    datum
+    (ordernr, regelnr) → Regel(ordernr, regelnr)
+  ```
+
+  One block per table, in diagram order, separated by an empty line: the table's name, then its columns indented two
+  spaces. A repeated name gets a suffix by occurrence (`Klant#2`, `x#2`); unnamed tables are `#1`, `#2`, ….
+  A primary key is wrapped in asterisks (`*klantnr*`, `*x#2*`); then come `/` calculated and `°` nullable, in the
+  diagram's order (`totaal/°`). Single-column references are written on their column (`klantnr → Klant.klantnr`;
+  several from one column comma-separated: `ref → A.id, B.id`). A composite reference is a line of its own after the
+  columns, columns paired in order. References use names without the notation. Table positions and the form-field
+  list are not exported. Same diagram, same text; no internal IDs. Export only: there is no import. Disabled while
+  there are no tables. Because names can only contain letters, digits, dashes and underscores (below), none of the
+  notation can be part of a name, so the text is unambiguous. If the answer field renders Markdown, `*klantnr*`
+  would show as italics without the asterisks; check this in the release gate.
 - **New** asks for confirmation, then clears the diagram (optionally keeping the form fields). It is one undo step;
   the recovery copy follows the cleared state.
 
@@ -138,9 +169,9 @@ diagram and says so.
    bold underlined keys, superscript `o`, `/`, braces at both ends, arrowheads.
 3. Reload the tab: the diagram is restored.
 
-Automated in `tests/unit/export.test.ts` (scene, scale limits, clipboard results with fake browser objects, JSON,
+Automated in `tests/unit/export.test.ts` (scene, scale limits, clipboard results with fake browser objects, the text export,
 New, recovery status) and `tests/e2e/milestone4.spec.ts`: in Chromium a real clipboard round trip (the PNG is read
-back and checked for size, opaque white corners, ink and the absence of selection colours; the JSON is read back and
+back and checked for size, opaque white corners, ink and the absence of selection colours; the text is read back and
 compared), and in every browser a blocked and an unsupported clipboard, New diagram, corrupt recovery data, a change
 right before reload, and a 25-field / 10-table / 12-reference diagram whose interactions each stay under one second.
 
@@ -245,8 +276,14 @@ E2E hook fails any test that triggers a request to another host.
 
 ## Deviations from the plan and decisions
 
-- **Restricted names** (not in the plan): letters, digits, dashes and underscores only. Form-field labels stay
-  free text and are converted when placed.
+- **Restricted names** (not in the plan): letters, digits, dashes and underscores only, so the text export needs no
+  quoting or escaping. Form-field labels stay free text and are converted when placed.
+- **Copy data is a plain-text description, not the internal document as JSON** (plan §6.2 says "serialize a
+  complete, versioned `KrijtDocument` to plain JSON text"). The internal format's random IDs made references
+  unreadable; the text keeps what is needed to understand the answer (tables, column order, notation, references)
+  and drops internal IDs, layout (the image carries it), the form-field list (it comes from the exercise) and a
+  format/version marker. Session recovery still stores the internal, versioned `KrijtDocument`.
+
 - **Reference ends are adjacent, ordered units** (plan §4.3 asks for a documented rule; this follows the course
   convention and deliberately narrows plan §2, which allowed non-adjacent ends). Ends must be side by side when the
   reference is made, pair up left to right, and every edit keeps them that way: shifting reorders inside the end or

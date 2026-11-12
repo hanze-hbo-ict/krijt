@@ -129,7 +129,9 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
             Paste it into your answer and check that it arrived; Krijt only reports success when the browser confirms the copy.
           </li>
           <li>
-            <strong>Copy data</strong> copies the diagram as text (JSON), for when text answers are allowed. Krijt cannot load it back.
+            <strong>Copy data</strong> copies the diagram as plain text: each table's name (unnamed ones as #1, #2, …) with its columns indented below,
+            with *keys* in asterisks, / for calculated, ° for nullable, and references written as “klantnr → Klant.klantnr”.
+            Use it when text answers are allowed. Krijt cannot load it back.
           </li>
           <li>Krijt never downloads or uploads files.</li>
         </ul>

@@ -24,6 +24,18 @@ npm run test:e2e   # Playwright against the production build (Chromium, Firefox,
 
 First-time E2E setup: `npx playwright install chromium firefox webkit`. Run against the dev server with `KRIJT_E2E_DEV=1`.
 
+## Deployment
+
+`.github/workflows/deploy.yml` tests, builds and deploys to Cloudflare Pages (project `krijt`,
+<https://krijt.pages.dev>), like Krash. Every push to `main` deploys to production; pull requests from this repository
+get a preview URL. The pipeline runs the unit tests, the production build and the Chromium E2E tests before deploying.
+`public/_headers` gives the deployed site the same CSP and security headers as `npm run preview`.
+
+One-time setup:
+
+1. Create the Pages project: `npx wrangler login`, then `npx wrangler pages project create krijt --production-branch main`.
+2. Add repository secrets `CLOUDFLARE_API_TOKEN` (permission "Cloudflare Pages: Edit") and `CLOUDFLARE_ACCOUNT_ID`.
+
 ## What works now (Milestone 1)
 
 - **Form fields sidebar** (resizable, with drag or ←/→ on the splitter): type a field and press Enter (focus stays for

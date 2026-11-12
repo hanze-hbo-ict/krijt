@@ -1,0 +1,70 @@
+name: Test and deploy
+
+# Every push to main deploys to Cloudflare Pages (production: https://krijt.pages.dev).
+# Pull requests from this repository get a preview deployment.
+#
+# Required repository secrets:
+#   CLOUDFLARE_API_TOKEN   – API token with "Cloudflare Pages: Edit" permission
+#   CLOUDFLARE_ACCOUNT_ID  – the Cloudflare account that owns the Pages project
+# The Pages project "krijt" must exist once:
+#   npx wrangler pages project create krijt --production-branch main
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Chromium for E2E tests
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E tests (Chromium, production build)
+        run: npx playwright test --project=chromium
+        env:
+          CI: true
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+
+      - name: Deploy to Cloudflare Pages
+        # Secrets are not available to pull requests from forks; skip those.
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=krijt --branch=${{ github.head_ref || github.ref_name }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

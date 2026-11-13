@@ -1,15 +1,11 @@
-/* Krijt layout. Base controls follow Krash (and through it Kopje); the shell is full-height for working space. */
+/* Krijt layout. The page chrome and base controls are Krash's (and through it Kopje's). */
 
 * {
   box-sizing: border-box;
 }
 html,
-body,
-#root {
-  margin: 0;
-  height: 100%;
-}
 body {
+  margin: 0;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans);
@@ -26,7 +22,8 @@ button {
   border: 1px solid var(--line);
   background: var(--panel);
   border-radius: var(--radius-m);
-  padding: 7px 11px;
+  /* Kopje's 0.55rem 0.8rem; in px because the root font size here is 13px, not 16px. */
+  padding: 8.8px 12.8px;
   font-weight: 600;
   font-size: var(--text-m);
   display: inline-flex;
@@ -44,6 +41,26 @@ button:disabled {
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+[hidden] {
+  display: none !important;
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -40px;
+  background: var(--ink);
+  color: var(--panel);
+  padding: 6px 10px;
+  border-radius: var(--radius-s);
+  z-index: 100;
+}
+.skip-link:focus {
+  top: 8px;
 }
 kbd {
   font-family: var(--font-mono);
@@ -124,6 +141,15 @@ textarea:focus-visible {
   width: 30px;
   height: 30px;
 }
+/* Pane header controls have Kopje's sizes: 34px icon buttons with 18px icons. */
+.panel-header .icon-button {
+  width: 34px;
+  height: 34px;
+}
+.panel-header .icon-button .icon {
+  width: 18px;
+  height: 18px;
+}
 .icon-button:hover:enabled {
   color: var(--ink);
 }
@@ -179,64 +205,124 @@ textarea:focus-visible {
   transform: none;
 }
 
-/* ---- Shell ---------------------------------------------------------------- */
-.app {
-  height: 100%;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+/* ---- Header / footer (values from Kopje, as in Krash) ------------------- */
+.app-header,
+main,
+.app-footer {
+  max-width: 1440px;
+  margin: auto;
+  padding-left: 32px;
+  padding-right: 32px;
 }
 .app-header {
+  border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
+  padding-top: 22px;
+  padding-bottom: 22px;
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 13px;
 }
 .brand-mark {
   background: var(--ink);
   color: var(--panel);
-  border-radius: 9px;
+  letter-spacing: -2px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  font-size: 21px;
+  width: 46px;
+  height: 46px;
+  padding-right: 3px;
+  font-size: 31px;
   font-weight: 750;
-  letter-spacing: -1px;
 }
 .brand h1 {
-  letter-spacing: -0.5px;
+  letter-spacing: -0.7px;
   margin: 0;
-  font-size: 18px;
-  line-height: 1.1;
+  font-size: 23px;
 }
 .brand p {
   color: var(--muted);
-  margin: 1px 0 0;
-  font-size: var(--text-s);
+  margin: 3px 0 0;
+  font-size: 12px;
 }
-.header-actions {
+.theme-control {
+  display: grid;
+  place-items: center;
+  padding: 8px;
+}
+.theme-control .icon {
+  width: 20px;
+  height: 20px;
+}
+main {
+  padding-top: 22px;
+  padding-bottom: 24px;
+}
+.workspace-heading {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
-.save-warning {
-  color: var(--error);
+.eyebrow {
+  letter-spacing: 1.7px;
+  color: var(--muted);
+  margin: 0;
+  font-size: 10px;
+  font-weight: 750;
+}
+.save-state {
+  margin: 0;
+  /* Same line height as the 10px eyebrow beside it, so the row is as tall as Kopje's. */
+  line-height: 12px;
   font-size: var(--text-s);
+}
+.save-failed {
+  color: var(--error);
+  font-weight: 650;
+}
+.workspace-motto {
+  color: var(--muted);
+  margin: 14px 0 0;
+  font-size: 12px;
+}
+.app-footer {
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 14px;
+  padding-top: 16px;
+  padding-bottom: 20px;
+  font-size: 10px;
+}
+.app-footer a {
+  color: inherit;
+  text-underline-offset: 3px;
+  border-radius: 3px;
+}
+.app-footer a:hover {
+  color: var(--ink);
+}
+.storage-warning {
+  color: var(--error);
 }
 
+/* ---- Workspace grid (as in Krash) ----------------------------------------- */
 .workspace {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 16px;
+  height: clamp(420px, calc(100dvh - 265px), 1100px);
   min-height: 0;
-  padding: 12px 16px 16px;
 }
 .workspace.sidebar-collapsed {
   grid-template-columns: 48px minmax(0, 1fr);
@@ -257,9 +343,9 @@ textarea:focus-visible {
   justify-content: space-between;
   align-items: center;
   gap: var(--space-2);
-  min-height: 56px;
+  min-height: 62px;
   flex: none;
-  padding: 8px 12px 8px 16px;
+  padding: 12px 16px;
 }
 .panel-header h2 {
   margin: 0;
@@ -467,20 +553,6 @@ textarea:focus-visible {
 .canvas-background {
   fill-opacity: 1;
 }
-.canvas-empty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-}
-.canvas-empty p {
-  color: var(--muted);
-  max-width: 360px;
-  text-align: center;
-  line-height: 1.5;
-  margin: 0;
-}
 
 /* Tables */
 .relation-header {
@@ -535,7 +607,7 @@ textarea:focus-visible {
   stroke-width: 1.25;
 }
 .cell:hover .cell-box {
-  fill: #f1f5ff;
+  fill: var(--diagram-hover);
 }
 .attr-text {
   fill: var(--diagram-ink);
@@ -550,17 +622,16 @@ textarea:focus-visible {
 }
 /* Selected attribute: a thick inner frame (not colour alone) plus a tint. */
 .cell[data-selected] .cell-box {
-  fill: #e3ebff;
+  fill: var(--diagram-tint);
 }
 .cell-selection {
   fill: none;
-  /* Cells are always light paper, so the light dark-theme accent would vanish: use the light-theme blue. */
-  stroke: #315ac6;
+  stroke: var(--diagram-mark);
   stroke-width: 3;
   pointer-events: none;
 }
 .cell-tick {
-  fill: #315ac6;
+  fill: var(--diagram-mark);
   pointer-events: none;
 }
 .cell[data-dragged] {
@@ -588,7 +659,7 @@ textarea:focus-visible {
   stroke-dasharray: none;
 }
 .relation[data-destination]:hover .cell-box {
-  fill: #e3ebff;
+  fill: var(--diagram-tint);
 }
 .relation[data-destination]:hover .header-band {
   fill: var(--diagram-handle);
@@ -673,17 +744,16 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
-/* Ends of the reference being made or selected. Cells are light paper in both themes, so the fixed
-   light-theme blue. While making one: foreign key dashed, referenced solid, both tinted. A selected
-   reference: both ends dashed, no tint. Composite ends also carry numbers. */
+/* Ends of the reference being made or selected. While making one: foreign key dashed, referenced solid,
+   both tinted. A selected reference: both ends dashed, no tint. Composite ends also carry numbers. */
 .cell-ref-mark {
   fill: none;
-  stroke: #315ac6;
+  stroke: var(--diagram-mark);
   stroke-width: 3;
   pointer-events: none;
 }
 .cell[data-ref-role]:not([data-ref-viewing]) .cell-box {
-  fill: #e3ebff;
+  fill: var(--diagram-tint);
 }
 .cell[data-ref-role='source'] .cell-ref-mark,
 .cell[data-ref-viewing] .cell-ref-mark {
@@ -693,10 +763,10 @@ textarea:focus-visible {
   pointer-events: none;
 }
 .cell-ref-badge circle {
-  fill: #315ac6;
+  fill: var(--diagram-mark);
 }
 .cell-ref-badge text {
-  fill: #ffffff;
+  fill: var(--diagram-mark-ink);
   font-size: 8.5px;
   font-weight: 700;
   text-anchor: middle;
@@ -862,7 +932,7 @@ textarea:focus-visible {
   color: var(--panel);
 }
 
-/* ---- Help ----------------------------------------------------------------- */
+/* ---- Dialogs ----------------------------------------------------------------- */
 .help-dialog {
   border: 1px solid var(--line);
   border-radius: var(--radius-l);
@@ -915,34 +985,73 @@ textarea:focus-visible {
   margin-top: 18px;
 }
 
-@media (max-width: 720px) {
-  .workspace {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(180px, 38%) minmax(0, 1fr);
-    gap: 10px;
-    padding: 10px 16px 16px;
-  }
+/* ---- Narrow screens (Krash's breakpoints) --------------------------------- */
+@media (max-width: 900px) {
+  .workspace,
   .workspace.sidebar-collapsed {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
+    height: auto;
+  }
+  .sidebar-body {
+    max-height: 32dvh;
   }
   .sidebar-collapsed .sidebar .panel-header {
-    justify-content: flex-end;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 0;
+  }
+  .sidebar-collapsed .sidebar h2 {
+    display: block;
+  }
+  .diagram-panel {
+    height: max(420px, calc(100dvh - 180px));
+  }
+  .diagram-header {
+    flex-wrap: wrap;
+  }
+}
+
+/* Same breakpoint and values as Kopje */
+@media (max-width: 740px) {
+  .app-header,
+  main,
+  .app-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .app-header {
+    padding-top: 14px;
+    padding-bottom: 14px;
   }
   .brand p {
     display: none;
   }
-}
-
-.notation-table {
-  border-collapse: collapse;
-  margin: 2px 0 4px;
-}
-.notation-table td {
-  padding: 3px 14px 3px 0;
-  vertical-align: baseline;
-}
-.notation-table td:first-child {
-  font-size: 15px;
-  white-space: nowrap;
+  .brand-mark {
+    border-radius: 9px;
+    width: 36px;
+    height: 36px;
+    font-size: 26px;
+  }
+  .brand h1 {
+    font-size: 21px;
+  }
+  main {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+  .workspace-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+    margin-bottom: 12px;
+  }
+  .workspace-motto {
+    font-size: 11px;
+  }
+  .app-footer {
+    gap: 8px;
+    padding-top: 12px;
+    padding-bottom: 14px;
+  }
 }

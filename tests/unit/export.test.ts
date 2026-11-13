@@ -311,7 +311,7 @@ describe('recovery status', () => {
   it('tells apart nothing stored, restored, and unusable data', () => {
     expect(readSession(null).status).toBe('none')
     expect(readSession(store(null)).status).toBe('none')
-    const good = serializeSession({ doc: sample(), ui: { viewport: { x: 0, y: 0, zoom: 1 }, sidebarCollapsed: false } })
+    const good = serializeSession({ doc: sample(), ui: { viewport: { x: 0, y: 0, zoom: 1 }, sidebarCollapsed: false, theme: 'system' } })
     expect(readSession(store(good))).toMatchObject({ status: 'restored', data: { doc: sample() } })
     for (const bad of ['{', '"x"', JSON.stringify({ version: 2, doc: sample() }), JSON.stringify({ version: 1, doc: { format: 'krijt' } })])
       expect(readSession(store(bad))).toEqual({ status: 'unreadable', data: null })

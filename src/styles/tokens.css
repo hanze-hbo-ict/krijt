@@ -1,6 +1,7 @@
 /*
  * Krijt design tokens, taken from Krash (which follows Klode and Kopje: quiet
- * light workbench, fine borders, one blue accent). Diagram tokens are Krijt's.
+ * light workbench, fine borders, one blue accent). Diagram tokens are Krijt's: the editor's
+ * tables follow the theme; the copied image has its own fixed dark-on-white colours (clipboard/scene.ts).
  */
 :root {
   color-scheme: light;
@@ -47,6 +48,10 @@
   --diagram-ink: #111827;
   --diagram-handle: #eef1f6;
   --diagram-connector: #111827;
+  --diagram-hover: #f1f5ff; /* a hovered cell */
+  --diagram-tint: #e3ebff; /* a selected cell, a reference end, a destination */
+  --diagram-mark: #315ac6; /* selection frame, reference-end marks and badges */
+  --diagram-mark-ink: #ffffff; /* text on a badge */
 
   --radius-s: 6px;
   --radius-m: 8px;
@@ -96,10 +101,14 @@
     --syntax-name: #9fc6ff;
     --syntax-string: #99d9b1;
     --syntax-comment: #8d99ad;
-    --diagram-paper: #f8fafc;
-    --diagram-ink: #111827;
+    --diagram-paper: #1c2431;
+    --diagram-ink: #e5eaf4;
     --diagram-handle: #2a3546;
-    --diagram-connector: #d5dce8;
+    --diagram-connector: #e5eaf4;
+    --diagram-hover: #24304a;
+    --diagram-tint: #293851;
+    --diagram-mark: #acc1ff;
+    --diagram-mark-ink: #141a24;
   }
 }
 
@@ -135,8 +144,12 @@
   --syntax-name: #9fc6ff;
   --syntax-string: #99d9b1;
   --syntax-comment: #8d99ad;
-  --diagram-paper: #f8fafc;
-  --diagram-ink: #111827;
+  --diagram-paper: #1c2431;
+  --diagram-ink: #e5eaf4;
   --diagram-handle: #2a3546;
-  --diagram-connector: #d5dce8;
+  --diagram-connector: #e5eaf4;
+  --diagram-hover: #24304a;
+  --diagram-tint: #293851;
+  --diagram-mark: #acc1ff;
+  --diagram-mark-ink: #141a24;
 }

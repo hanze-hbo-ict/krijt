@@ -11,7 +11,7 @@ import { DEFAULT_VIEWPORT, MAX_ZOOM, MIN_ZOOM, type Viewport } from '../geometry
 export const SESSION_KEY = 'krijt:v1:session'
 export const SAVE_DEBOUNCE_MS = 300
 
-export type SessionData = { doc: KrijtDocument; ui: Pick<UiState, 'viewport' | 'sidebarCollapsed'> }
+export type SessionData = { doc: KrijtDocument; ui: Pick<UiState, 'viewport' | 'sidebarCollapsed' | 'theme'> }
 
 export function safeSessionStorage(): Storage | null {
   try {
@@ -27,7 +27,7 @@ export function safeSessionStorage(): Storage | null {
 }
 
 export function serializeSession(data: SessionData): string {
-  return JSON.stringify({ version: 1, doc: data.doc, ui: { viewport: data.ui.viewport, sidebarCollapsed: data.ui.sidebarCollapsed } })
+  return JSON.stringify({ version: 1, doc: data.doc, ui: { viewport: data.ui.viewport, sidebarCollapsed: data.ui.sidebarCollapsed, theme: data.ui.theme } })
 }
 
 function parseViewport(v: unknown): Viewport {
@@ -55,7 +55,11 @@ export function parseSession(raw: string | null): SessionData | null {
   const ui = typeof obj.ui === 'object' && obj.ui !== null ? (obj.ui as Record<string, unknown>) : {}
   return {
     doc,
-    ui: { viewport: parseViewport(ui.viewport), sidebarCollapsed: ui.sidebarCollapsed === true },
+    ui: {
+      viewport: parseViewport(ui.viewport),
+      sidebarCollapsed: ui.sidebarCollapsed === true,
+      theme: ui.theme === 'light' || ui.theme === 'dark' ? ui.theme : 'system',
+    },
   }
 }
 

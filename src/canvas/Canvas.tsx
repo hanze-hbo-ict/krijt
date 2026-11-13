@@ -630,12 +630,6 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
         </g>
       </svg>
 
-      {doc.relations.length === 0 && (
-        <div className="canvas-empty" aria-hidden="true">
-          <p>Select form fields in the sidebar, choose Place in diagram, then click here to create a table.</p>
-        </div>
-      )}
-
       {editing?.kind === 'relationName' &&
         (() => {
           const l = layouts.get(editing.relationId)

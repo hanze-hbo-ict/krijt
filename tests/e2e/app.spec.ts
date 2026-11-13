@@ -325,11 +325,15 @@ test('corrupt session data starts an empty diagram instead of crashing', async (
   await expect(page.getByLabel('New field')).toBeVisible()
 })
 
-test('help opens and closes', async ({ page }) => {
-  await page.getByRole('button', { name: 'Help' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Using Krijt' })
-  await expect(dialog).toBeVisible()
-  await expect(dialog).toContainText('not a saved file')
-  await page.keyboard.press('Escape')
-  await expect(dialog).toHaveCount(0)
+test('the appearance control cycles system, light and dark, and is kept for reload', async ({ page }) => {
+  const html = page.locator('html')
+  await expect(html).not.toHaveAttribute('data-theme')
+  await page.getByRole('button', { name: /^System appearance/ }).click()
+  await expect(html).toHaveAttribute('data-theme', 'light')
+  await page.getByRole('button', { name: /^Light appearance/ }).click()
+  await expect(html).toHaveAttribute('data-theme', 'dark')
+  await page.reload()
+  await expect(html).toHaveAttribute('data-theme', 'dark')
+  await page.getByRole('button', { name: /^Dark appearance/ }).click()
+  await expect(html).not.toHaveAttribute('data-theme')
 })

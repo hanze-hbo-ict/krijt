@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Canvas, type CanvasHandle, type DragGhost } from '../canvas/Canvas'
-import { Icon } from '../components/Icon'
+import { ThemeIcon } from '../components/Icon'
 import { isTypingTarget } from '../components/InlineInput'
 import { createCanvasMeasurer } from '../geometry/measure'
 import { DEFAULT_VIEWPORT } from '../geometry/viewport'
@@ -14,7 +14,6 @@ import { initialState, reducer, selectedAttributeIds, type AppState } from '../s
 import { DiagramHeader } from './DiagramHeader'
 import { MessageBanner } from './MessageBanner'
 import { ClearDialog } from './ClearDialog'
-import { HelpDialog } from './HelpDialog'
 
 const NUDGE = 10
 
@@ -39,7 +38,6 @@ function isControl(target: EventTarget | null): boolean {
 export function App() {
   const [state, dispatch] = useReducer(reducer, undefined, init)
   const measurer = useMemo(() => createCanvasMeasurer(), [])
-  const [helpOpen, setHelpOpen] = useState(false)
   const [clearOpen, setClearOpen] = useState(false)
   const [copying, setCopying] = useState<'image' | 'data' | null>(null)
   // After a confirmed copy, that button shows a checkmark for a moment (as Krash's copy buttons do).
@@ -60,19 +58,31 @@ export function App() {
 
   // Debounced same-tab recovery after document or layout changes.
   const { doc } = state
-  const { viewport, sidebarCollapsed } = state.ui
+  const { viewport, sidebarCollapsed, theme } = state.ui
   useEffect(() => {
     if (!storage) return
-    const t = setTimeout(() => setSaveStatus(saveSession(storage, { doc, ui: { viewport, sidebarCollapsed } }) ? 'ok' : 'failed'), SAVE_DEBOUNCE_MS)
+    const t = setTimeout(
+      () => setSaveStatus(saveSession(storage, { doc, ui: { viewport, sidebarCollapsed, theme } }) ? 'ok' : 'failed'),
+      SAVE_DEBOUNCE_MS,
+    )
     return () => clearTimeout(t)
-  }, [storage, doc, viewport, sidebarCollapsed])
+  }, [storage, doc, viewport, sidebarCollapsed, theme])
+
+  // Appearance, as in Krash: no attribute follows the system; data-theme forces light or dark.
+  useEffect(() => {
+    const root = document.documentElement
+    if (theme === 'system') root.removeAttribute('data-theme')
+    else root.setAttribute('data-theme', theme)
+  }, [theme])
+  const nextTheme = ({ system: 'light', light: 'dark', dark: 'system' } as const)[theme]
+  const themeLabel = { system: 'System appearance', light: 'Light appearance', dark: 'Dark appearance' }[theme]
 
   // Do not lose the last debounce window: save at once when the tab is hidden or the page goes away.
   useEffect(() => {
     if (!storage) return
     const flush = () => {
       const s = stateRef.current
-      saveSession(storage, { doc: s.doc, ui: { viewport: s.ui.viewport, sidebarCollapsed: s.ui.sidebarCollapsed } })
+      saveSession(storage, { doc: s.doc, ui: { viewport: s.ui.viewport, sidebarCollapsed: s.ui.sidebarCollapsed, theme: s.ui.theme } })
     }
     const onVisibility = () => document.visibilityState === 'hidden' && flush()
     window.addEventListener('pagehide', flush)
@@ -187,51 +197,73 @@ export function App() {
 
 
   return (
-    <div className="app">
+    <>
+      <a className="skip-link" href="#diagram-panel">
+        Skip to diagram
+      </a>
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
-            K
+            k.
           </span>
           <div>
             <h1>Krijt</h1>
-            <p lang="nl">Strokendiagrammen</p>
+            <p>A little board for diagrams.</p>
           </div>
         </div>
-        <div className="header-actions">
-          {saveStatus !== 'ok' && (
-            <span className="save-warning" role="status">
-              {saveStatus === 'failed' ? 'Could not keep a copy for reload' : 'Reload recovery unavailable in this browser'}
-            </span>
-          )}
-          <button type="button" onClick={() => setHelpOpen(true)}>
-            <Icon name="help" />
-            Help
-          </button>
-        </div>
+        <button
+          type="button"
+          className="theme-control"
+          onClick={() => dispatch({ type: 'ui', patch: { theme: nextTheme } })}
+          aria-label={`${themeLabel}. Switch to ${nextTheme} appearance`}
+          title={`${themeLabel}. Switch to ${nextTheme} appearance`}
+        >
+          <ThemeIcon choice={theme} />
+        </button>
       </header>
 
-      <main className={`workspace${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-        <Sidebar state={state} dispatch={dispatch} canvasHandle={canvasHandle} onGhost={setGhost} />
-        <section className="panel diagram-panel" aria-labelledby="diagram-title">
-          <DiagramHeader
-            state={state}
-            dispatch={dispatch}
-            copying={copying}
-            copied={copied}
-            onCopyImage={onCopyImage}
-            onCopyData={onCopyData}
-            onClear={() => setClearOpen(true)}
-            onZoomOut={() => canvasHandle.current?.zoomOut()}
-            onZoomIn={() => canvasHandle.current?.zoomIn()}
-            onFit={() => canvasHandle.current?.fit()}
-          />
-          <div className="canvas-area">
-            <Canvas state={state} dispatch={dispatch} measurer={measurer} handleRef={canvasHandle} onGhost={setGhost} />
-            <MessageBanner state={state} dispatch={dispatch} />
-          </div>
-        </section>
+      <main>
+        <div className="workspace-heading">
+          <p className="eyebrow">DIAGRAM WORKSPACE</p>
+          {/* Saving is silent; only a failure is shown (unavailable storage is reported in the footer). */}
+          {saveStatus === 'failed' && (
+            <p className="save-state save-failed" role="alert">
+              Your diagram could not be kept for reload
+            </p>
+          )}
+        </div>
+
+        <div className={`workspace${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+          <Sidebar state={state} dispatch={dispatch} canvasHandle={canvasHandle} onGhost={setGhost} />
+          <section className="panel diagram-panel" id="diagram-panel" aria-labelledby="diagram-title">
+            <DiagramHeader
+              state={state}
+              dispatch={dispatch}
+              copying={copying}
+              copied={copied}
+              onCopyImage={onCopyImage}
+              onCopyData={onCopyData}
+              onClear={() => setClearOpen(true)}
+              onZoomOut={() => canvasHandle.current?.zoomOut()}
+              onZoomIn={() => canvasHandle.current?.zoomIn()}
+              onFit={() => canvasHandle.current?.fit()}
+            />
+            <div className="canvas-area">
+              <Canvas state={state} dispatch={dispatch} measurer={measurer} handleRef={canvasHandle} onGhost={setGhost} />
+              <MessageBanner state={state} dispatch={dispatch} />
+            </div>
+          </section>
+        </div>
+        <p className="workspace-motto">One form. One table at a time.</p>
       </main>
+
+      <footer className="app-footer">
+        <a href="https://github.com/hanze-hbo-ict/krijt">Krijt on GitHub</a>
+        <span>Everything runs in your browser, and your diagram is kept only in this tab.</span>
+        <span className="storage-warning" hidden={saveStatus !== 'unavailable'}>
+          Session storage is unavailable: your diagram will be lost on reload.
+        </span>
+      </footer>
 
       {ghost && (
         <div className="drag-ghost" style={{ left: ghost.x + 14, top: ghost.y + 10 }} aria-hidden="true">
@@ -239,7 +271,6 @@ export function App() {
         </div>
       )}
 
-      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
       {clearOpen && (
         <ClearDialog
           hasFields={doc.sourceFields.length > 0}
@@ -260,6 +291,6 @@ export function App() {
           }
         />
       )}
-    </div>
+    </>
   )
 }

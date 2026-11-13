@@ -44,14 +44,14 @@ describe('session recovery', () => {
   it('round-trips document and layout state', () => {
     const storage = new MemoryStorage()
     const doc = sampleDoc()
-    const ui = { viewport: { x: 12, y: -4, zoom: 1.5 }, sidebarCollapsed: true }
+    const ui = { viewport: { x: 12, y: -4, zoom: 1.5 }, sidebarCollapsed: true, theme: 'dark' as const }
     expect(saveSession(storage, { doc, ui })).toBe(true)
     expect(loadSession(storage)).toEqual({ doc, ui })
   })
 
   it('returns null for missing, corrupt or incompatible data, without throwing', () => {
     const doc = sampleDoc()
-    const good = JSON.parse(serializeSession({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false } }))
+    const good = JSON.parse(serializeSession({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false, theme: 'system' } }))
     const cases: (string | null)[] = [
       null,
       '',
@@ -83,11 +83,11 @@ describe('session recovery', () => {
 
   it('falls back to defaults for odd UI values but keeps the document', () => {
     const doc = sampleDoc()
-    const raw = JSON.stringify({ version: 1, doc, ui: { viewport: { x: 0, y: 0, zoom: 99 }, sidebarCollapsed: 'yes' } })
-    expect(parseSession(raw)).toEqual({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false } })
+    const raw = JSON.stringify({ version: 1, doc, ui: { viewport: { x: 0, y: 0, zoom: 99 }, sidebarCollapsed: 'yes', theme: 'sepia' } })
+    expect(parseSession(raw)).toEqual({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false, theme: 'system' } })
     // Sessions from before the collapse button stored a width instead: that is ignored.
     const old = JSON.stringify({ version: 1, doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarWidth: 320 } })
-    expect(parseSession(old)).toEqual({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false } })
+    expect(parseSession(old)).toEqual({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false, theme: 'system' } })
   })
 
   it('keeps ticks, and rejects a tick that is not a boolean', () => {
@@ -103,8 +103,8 @@ describe('session recovery', () => {
   it('reports failed writes instead of throwing', () => {
     const storage = new MemoryStorage()
     storage.failWrites = true
-    expect(saveSession(storage, { doc: emptyDocument(), ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false } })).toBe(false)
-    expect(saveSession(null, { doc: emptyDocument(), ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false } })).toBe(false)
+    expect(saveSession(storage, { doc: emptyDocument(), ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false, theme: 'system' } })).toBe(false)
+    expect(saveSession(null, { doc: emptyDocument(), ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false, theme: 'system' } })).toBe(false)
     expect(storage.getItem(SESSION_KEY)).toBeNull()
   })
 })

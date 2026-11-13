@@ -30,6 +30,31 @@ const PATHS: Record<string, string[]> = {
   clear: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'm9 9 6 6M15 9l-6 6'],
 }
 
+export type ThemeChoice = 'system' | 'light' | 'dark'
+
+/** The appearance control's icon, as in Krash: half-filled circle (system), sun (light), moon (dark). */
+export function ThemeIcon({ choice }: { choice: ThemeChoice }) {
+  if (choice === 'light')
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" className="icon">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" />
+      </svg>
+    )
+  if (choice === 'dark')
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" className="icon">
+        <path d="M20 15A8.5 8.5 0 0 1 9 4a8.5 8.5 0 1 0 11 11Z" />
+      </svg>
+    )
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" className="icon">
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 export function Icon({ name, size }: { name: keyof typeof PATHS | string; size?: number }) {
   const paths = PATHS[name] ?? []
   return (

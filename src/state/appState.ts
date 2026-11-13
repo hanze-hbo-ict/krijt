@@ -13,6 +13,7 @@ import { applyCommand, isContiguous, REFERENCE_ADJACENT_ERROR, type Command } fr
 import type { Id, KrijtDocument } from '../model/types'
 import { emptyDocument } from '../model/types'
 import { DEFAULT_VIEWPORT, type Viewport } from '../geometry/viewport'
+import type { ThemeChoice } from '../components/Icon'
 
 export type Selection =
   | { kind: 'none' }
@@ -62,6 +63,8 @@ export type UiState = {
   editing: Editing
   viewport: Viewport
   sidebarCollapsed: boolean
+  /** Appearance: follow the system, or force light or dark. Kept with the session, never in localStorage. */
+  theme: ThemeChoice
   message: Message | null
 }
 
@@ -90,6 +93,7 @@ export function initialUi(): UiState {
     editing: null,
     viewport: DEFAULT_VIEWPORT,
     sidebarCollapsed: false,
+    theme: 'system',
     message: null,
   }
 }

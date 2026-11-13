@@ -43,13 +43,21 @@ One-time setup:
 Every essential operation works with plain clicks and visible controls. Dragging is an optional shortcut, and no
 operation needs a modifier key.
 
-**Form fields** (sidebar, resizable with drag or ←/→ on the splitter)
+**Form fields** (sidebar; the header button hides it to a narrow column, and **Copy form fields** copies the list,
+one per line)
 
-- Type a field and press Enter (focus stays for the next one); paste a multi-line list into the entry, or use
-  **Paste a list** (blank lines dropped, order and duplicates kept); rename or remove a field with its visible buttons.
-- **Place in diagram**: select fields with plain clicks, then click a table (header: append; left/right half of a cell:
-  insert before/after it) or empty canvas (new **unnamed** table). Command-first works too. Dragging fields onto the
-  canvas does the same. The inventory is never consumed; attributes are independent copies.
+- Type a field in the last row of the list and press Enter or **+** (focus stays for the next one); pasting a
+  multi-line list there adds one field per line (blank lines dropped, order and duplicates kept).
+- A click selects a field; **Add to selection** (or Shift-click) adds or removes more. Fields and diagram items are
+  never selected at the same time. A toolbar beside the sidebar, level with the last field clicked, has **Place in
+  diagram**, **Tick** (a checkmark for the student's own use, mixed for a mixed selection), **Rename** (one field) and
+  **Delete**; Escape clears the selection and Delete/Backspace deletes it.
+- **Place in diagram**: then click a table (header: append; left/right half of a cell: insert before/after it) or
+  empty canvas (new **unnamed** table). Dragging fields onto the canvas does the same. The inventory is never
+  consumed; attributes are independent copies.
+
+**Page**: the header, workspace heading, motto and footer are Krash's. The control at the top right cycles the
+appearance (system, light, dark).
 
 **Attributes**
 
@@ -118,8 +126,8 @@ so deletion needs no confirmation.
 **Messages** about dependent changes ("Deleted 2 attributes and 1 reference that used them. 1 empty table removed.")
 and refused operations appear over the top of the canvas.
 
-**Canvas and recovery**: scroll to pan, pinch to zoom, zoom buttons, 100% and Fit. The document, viewport and sidebar
-width are saved to `sessionStorage` (debounced, and at once when the tab is hidden or the page unloads, so a change
+**Canvas and recovery**: scroll to pan, pinch to zoom, zoom buttons, 100% and Fit. The document, viewport, collapsed sidebar
+and appearance are saved to `sessionStorage` (debounced, and at once when the tab is hidden or the page unloads, so a change
 right before a reload is kept) and restored on reload in the same tab. Corrupt or incompatible data starts an empty
 diagram and says so.
 
@@ -234,9 +242,9 @@ src/
   inventory/    Sidebar.tsx (form fields, field drag source)
   clipboard/    scene.ts (export picture as drawing operations), paint.ts (canvas + PNG), clipboard.ts (writes, errors)
   persistence/  session.ts (versioned sessionStorage)
-  components/   Icon, Splitter, InlineInput
-  app/          App.tsx (shell, shortcuts), DiagramHeader.tsx (undo/redo, zoom, copy, new), MessageBanner.tsx,
-                HelpDialog.tsx
+  components/   Icon, InlineInput
+  app/          App.tsx (shell, shortcuts, appearance), DiagramHeader.tsx (undo/redo, zoom, copy, clear),
+                MessageBanner.tsx, ClearDialog.tsx
 tests/
   unit/         commands, attributes, geometry, state machine, operations + history, references, export, session recovery
   e2e/          Playwright workflows (app.spec.ts: M1, milestone2.spec.ts … milestone4.spec.ts: M2–M4)
@@ -312,11 +320,11 @@ E2E hook fails any test that triggers a request to another host.
   as its pressed button (pressing it again cancels) and is explained by the canvas previews, with a hidden live region
   for screen readers. The diagram panel's header holds undo/redo, zoom (no percentage; Ctrl/⌘+0 resets) and copy.
 - **Keyboard:** ← → reorder selected attributes (they nudge a selected table, with ↑ ↓); Enter renames a single
-  selected attribute; Delete/Backspace deletes selected attributes.
+  selected attribute; Delete/Backspace deletes selected attributes (or selected form fields).
 - **Undo history is not saved** across a reload; only the document is.
 - Unchanged from M1: click-based table movement and pan/zoom/fit are included; source-field reordering is not
-  (optional in the plan); selection and the active operation are not restored on reload; dark mode keeps cells as light
-  "paper"; the UI is English (panel headers without Dutch subtitles); Krash's tokens and base styles are reused.
+  (optional in the plan); selection and the active operation are not restored on reload; in dark mode the tables
+  follow the theme (the copied image stays dark on white); the UI is English (panel headers without Dutch subtitles); Krash's tokens and base styles are reused.
 
 - **References (M3)**: **Reference** uses the selection, as Move/Copy do. A reference
   within one table is allowed (structure only); an attribute referring to itself and an exact duplicate are not.

@@ -7,6 +7,7 @@ import { defineConfig, devices } from '@playwright/test'
  */
 const dev = !!process.env.KRIJT_E2E_DEV
 const port = dev ? 5189 : 4189
+const VIEWPORT = { width: 1280, height: 1000 }
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -16,9 +17,11 @@ export default defineConfig({
   reporter: [['list']],
   use: { baseURL: `http://localhost:${port}`, trace: 'retain-on-failure' },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    // A taller window than the 720px default: the page chrome (as in Krash) leaves the diagram the window height
+    // minus 265px, and the tests click diagram positions down to y≈560.
+    { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: VIEWPORT } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'], viewport: VIEWPORT } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'], viewport: VIEWPORT } },
   ],
   webServer: {
     command: dev ? `npx vite --port ${port} --strictPort` : `npx vite build && npx vite preview --port ${port} --strictPort`,

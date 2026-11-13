@@ -1,6 +1,7 @@
 {
   "name": "krijt",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
   "type": "module",
   "description": "Krijt: a lightweight, browser-only editor for strokendiagrammen in database normalization exercises.",

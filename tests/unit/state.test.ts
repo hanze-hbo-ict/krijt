@@ -166,7 +166,7 @@ describe('selection state', () => {
     const s = withTable()
     const next = run(s, { type: 'command', command: { type: 'renameRelation', relationId: 'missing', name: 'x' } })
     expect(next.doc).toBe(s.doc)
-    expect(next.ui.message?.kind).toBe('error')
+    expect(next.ui.message?.title).toBe('Could not do that')
   })
 })
 

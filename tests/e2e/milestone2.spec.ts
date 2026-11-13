@@ -169,7 +169,7 @@ test('rename, reorder and delete attributes, with dependent deletions explained'
   await cellIn(rel, 'c').focus()
   await page.keyboard.press('Delete')
   await expect(relations(page)).toHaveCount(0)
-  await expect(page.locator('.bar-message')).toHaveCount(0)
+  await expect(page.getByRole('alertdialog')).toHaveCount(0)
   await page.keyboard.press('ControlOrMeta+z')
   expect(await tables(page)).toEqual([['Bedrag', 'c']])
 })

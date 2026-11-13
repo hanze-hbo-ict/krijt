@@ -125,8 +125,9 @@ including layout: a multi-attribute move with its empty-table removal is one ste
 table form one step. Inside text fields the browser's own undo is left alone. Undo restores deleted tables in place,
 so deletion needs no confirmation.
 
-**Messages**: only errors (a failed copy, a session that could not be restored, form fields with nothing to use as a
-name) appear, over the top of the canvas. What an action changed shows in the diagram itself.
+**Errors**: only errors are reported (a failed copy, a session that could not be restored, form fields from an older
+session with nothing to use as a name), each in a small dialog with an OK button, styled like the Clear dialog rather
+than `window.alert` (which exam browsers may suppress). What an action changed shows in the diagram itself.
 
 **Canvas and recovery**: scroll to pan, pinch to zoom, zoom buttons, 100% and Fit. The document, viewport, collapsed sidebar
 and appearance are saved to `sessionStorage` (debounced, and at once when the tab is hidden or the page unloads, so a change
@@ -246,7 +247,7 @@ src/
   persistence/  session.ts (versioned sessionStorage)
   components/   Icon, InlineInput
   app/          App.tsx (shell, shortcuts, appearance), DiagramHeader.tsx (undo/redo, zoom, copy, clear),
-                MessageBanner.tsx, ClearDialog.tsx
+                ErrorDialog.tsx, ClearDialog.tsx
 tests/
   unit/         commands, attributes, geometry, state machine, operations + history, references, export, session recovery
   e2e/          Playwright workflows (app.spec.ts: M1, milestone2.spec.ts … milestone4.spec.ts: M2–M4)

@@ -46,8 +46,8 @@ export type Editing =
   | { kind: 'newAttribute'; relationId: Id }
   | { kind: 'attributeName'; attributeId: Id }
 
-/** Only errors are reported; what an action changed shows in the diagram itself. */
-export type Message = { kind: 'error'; text: string }
+/** An error, shown as a dialog. Only errors are reported; what an action changed shows in the diagram itself. */
+export type Message = { title: string; text: string }
 
 export type UiState = {
   operation: Operation
@@ -222,7 +222,7 @@ function step(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'command': {
       const result = applyCommand(state.doc, action.command)
-      if (!result.ok) return { ...state, ui: { ...state.ui, message: { kind: 'error', text: result.error } } }
+      if (!result.ok) return { ...state, ui: { ...state.ui, message: { title: 'Could not do that', text: result.error } } }
       const ui = reconcileUi(result.doc, { ...state.ui, message: null, ...action.after })
       if (result.doc === state.doc) return { ...state, ui }
       return { doc: result.doc, ui, history: pushHistory(state.history, state.doc, action.coalesceKey ?? null) }

@@ -121,7 +121,7 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
     const text = stateRef.current.doc.sourceFields.map((f) => f.label).join('\n')
     void copyText(browserEnv(), text).then((result) => {
       if (!result.ok)
-        return dispatch({ type: 'ui', patch: { message: { kind: 'error', text: failureMessage('fields', result.reason, result.detail) } } })
+        return dispatch({ type: 'ui', patch: { message: { title: 'Could not copy', text: failureMessage('fields', result.reason, result.detail) } } })
       setCopied(true)
       if (copiedTimer.current) clearTimeout(copiedTimer.current)
       copiedTimer.current = setTimeout(() => setCopied(false), 1500)

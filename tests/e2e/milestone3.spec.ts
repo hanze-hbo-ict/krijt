@@ -204,7 +204,7 @@ test('impossible targets are blocked, Escape cancels, and deleting an attribute 
   await cellIn(table(page, 0), 'klantnr').hover()
   await expect(page.locator('.canvas')).toHaveAttribute('data-blocked', 'true')
   await cellIn(table(page, 0), 'klantnr').click()
-  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.getByRole('alertdialog')).toHaveCount(0)
   await expect(action(page, 'Reference')).toHaveAttribute('aria-pressed', 'true')
   await page.keyboard.press('Escape') // ends the operation; the selection stays
   await expect(action(page, 'Reference')).toHaveAttribute('aria-pressed', 'false')

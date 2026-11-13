@@ -12,7 +12,10 @@ export function ClearDialog({ hasFields, onClear, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     const d = ref.current
-    if (d && !d.open) d.showModal()
+    if (!d || d.open) return
+    d.showModal()
+    // showModal focuses the first button (the header's ×); the safe default action should have focus instead.
+    d.querySelector<HTMLElement>('[data-autofocus]')?.focus()
   }, [])
   const clear = (keepFields: boolean) => {
     onClear(keepFields)
@@ -31,7 +34,7 @@ export function ClearDialog({ hasFields, onClear, onClose }: Props) {
           This removes all tables and references. Undo brings them back until you reload the page; after that they are gone.
         </p>
         <div className="dialog-actions">
-          <button type="button" autoFocus onClick={() => ref.current?.close()}>
+          <button type="button" data-autofocus onClick={() => ref.current?.close()}>
             Cancel
           </button>
           {hasFields && (

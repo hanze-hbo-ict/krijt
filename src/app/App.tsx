@@ -12,7 +12,7 @@ import { serializeDocument } from '../model/serialize'
 import { readSession, safeSessionStorage, SAVE_DEBOUNCE_MS, saveSession, UNREADABLE_SESSION_MESSAGE } from '../persistence/session'
 import { initialState, reducer, selectedAttributeIds, type AppState } from '../state/appState'
 import { DiagramHeader } from './DiagramHeader'
-import { MessageBanner } from './MessageBanner'
+import { ErrorDialog } from './ErrorDialog'
 import { ClearDialog } from './ClearDialog'
 
 const NUDGE = 10
@@ -20,7 +20,7 @@ const NUDGE = 10
 function init(): AppState {
   const { data, status } = readSession(safeSessionStorage())
   if (data) return initialState(data.doc, data.ui)
-  return status === 'unreadable' ? initialState(undefined, { message: { kind: 'error', text: UNREADABLE_SESSION_MESSAGE } }) : initialState()
+  return status === 'unreadable' ? initialState(undefined, { message: { title: 'Could not restore your work', text: UNREADABLE_SESSION_MESSAGE } }) : initialState()
 }
 
 type SaveStatus = 'ok' | 'failed' | 'unavailable'
@@ -93,7 +93,7 @@ export function App() {
     }
   }, [storage])
 
-  const sayError = (text: string) => dispatch({ type: 'ui', patch: { message: { kind: 'error', text } } })
+  const sayError = (text: string) => dispatch({ type: 'ui', patch: { message: { title: 'Could not copy', text } } })
 
   // Both copies start synchronously inside the click, so the browser sees a user gesture.
   const onCopyImage = () => {
@@ -244,7 +244,6 @@ export function App() {
             />
             <div className="canvas-area">
               <Canvas state={state} dispatch={dispatch} measurer={measurer} handleRef={canvasHandle} onGhost={setGhost} />
-              <MessageBanner state={state} dispatch={dispatch} />
             </div>
           </section>
         </div>
@@ -265,6 +264,13 @@ export function App() {
         </div>
       )}
 
+      {state.ui.message && (
+        <ErrorDialog
+          key={`${state.ui.message.title}\n${state.ui.message.text}`}
+          message={state.ui.message}
+          onClose={() => dispatch({ type: 'ui', patch: { message: null } })}
+        />
+      )}
       {clearOpen && (
         <ClearDialog
           hasFields={doc.sourceFields.length > 0}

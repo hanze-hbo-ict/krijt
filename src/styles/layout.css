@@ -498,36 +498,6 @@ main {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.message-slot {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 6;
-  max-width: calc(100% - 32px);
-  pointer-events: none;
-}
-.bar-message {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: var(--radius-m);
-  padding: 4px 4px 4px 12px;
-  font-size: var(--text-m);
-  box-shadow: 0 2px 10px #0000001f;
-  pointer-events: auto;
-  border: 1px solid var(--line);
-}
-.bar-message .icon-button {
-  width: 26px;
-  height: 26px;
-}
-.bar-message.error {
-  color: var(--error);
-  background: var(--error-bg);
-  border-color: var(--error);
-}
-
 .canvas {
   position: relative;
   flex: 1;

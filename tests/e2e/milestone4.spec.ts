@@ -6,7 +6,9 @@ const canvas = (page: Page) => page.locator('.canvas-svg')
 const relations = (page: Page) => page.locator('.relation')
 const copyImage = (page: Page) => page.getByRole('button', { name: 'Copy as image' })
 const copyData = (page: Page) => page.getByRole('button', { name: 'Copy as text' })
-const alert = (page: Page) => page.locator('.bar-message.error')
+const alert = (page: Page) => page.getByRole('alertdialog')
+/** Closes the error dialog with its OK button. */
+const dismiss = (page: Page) => alert(page).getByRole('button', { name: 'OK' }).click()
 
 const attr = (id: string, name: string, flags: Partial<Record<'primaryKey' | 'nullable' | 'calculated', boolean>> = {}) => ({
   id,
@@ -158,9 +160,15 @@ test.describe('clipboard errors (all browsers)', () => {
     })
     await openWith(page, SAMPLE)
     await copyImage(page).click()
-    await expect(alert(page)).toHaveText(/blocked the clipboard.*Copy as image again/)
+    await expect(alert(page)).toContainText(/blocked the clipboard.*Copy as image again/)
+    await expect(alert(page).getByRole('heading')).toHaveText('Could not copy')
+    await expect(alert(page).getByRole('button', { name: 'OK' })).toBeFocused()
+    await dismiss(page)
+    await expect(alert(page)).toHaveCount(0)
     await copyData(page).click()
-    await expect(alert(page)).toHaveText(/blocked the clipboard.*Copy as text again/)
+    await expect(alert(page)).toContainText(/blocked the clipboard.*Copy as text again/)
+    await page.keyboard.press('Escape') // closes it too
+    await expect(alert(page)).toHaveCount(0)
     await expect(copyImage(page)).toBeEnabled()
   })
 
@@ -170,7 +178,7 @@ test.describe('clipboard errors (all browsers)', () => {
     })
     await openWith(page, SAMPLE)
     await copyImage(page).click()
-    await expect(alert(page)).toHaveText(/cannot put images on the clipboard/)
+    await expect(alert(page)).toContainText(/cannot put images on the clipboard/)
   })
 
   test('Copy image and Copy data are unavailable for an empty diagram', async ({ page }) => {
@@ -204,9 +212,10 @@ test('Clear diagram asks first, can keep the form fields, is undoable, and the r
   await expect(page.getByRole('list', { name: 'Form fields' }).getByRole('button')).toHaveCount(0)
 })
 
-test('corrupt recovery data starts an empty diagram with a notice, without crashing', async ({ page }) => {
+test('corrupt recovery data starts an empty diagram and says so, without crashing', async ({ page }) => {
   await openWithRaw(page, '{"version":1,"doc":{"format":"krijt","relations":[{')
-  await expect(alert(page)).toHaveText(/could not be restored/)
+  await expect(alert(page)).toContainText(/could not be restored/)
+  await dismiss(page)
   await expect(relations(page)).toHaveCount(0)
   await expect(page.getByLabel('New field')).toBeVisible()
 })

@@ -60,10 +60,10 @@ export function destinationFor(doc: KrijtDocument, target: CanvasTarget, point: 
 /** Placing the selected source fields at a target. Shared by Place mode and sidebar drops. */
 export function placeAction(state: AppState, fieldIds: Id[], target: CanvasTarget, point: Point): Action | null {
   const labels = orderedFieldLabels(state.doc, fieldIds)
-  if (labels.length === 0) return { type: 'ui', patch: { message: { kind: 'error', text: NO_FIELDS_MESSAGE } } }
+  if (labels.length === 0) return { type: 'ui', patch: { message: { title: 'Nothing to place', text: NO_FIELDS_MESSAGE } } }
   // Fields are valid names already, except ones kept from older sessions: convert, as when they were added.
   const names = labels.map(toValidName).filter((n) => n !== '')
-  if (names.length === 0) return { type: 'ui', patch: { message: { kind: 'error', text: NO_NAME_IN_FIELDS_MESSAGE } } }
+  if (names.length === 0) return { type: 'ui', patch: { message: { title: 'Nothing to place', text: NO_NAME_IN_FIELDS_MESSAGE } } }
   const intent = destinationFor(state.doc, target, point)
   if (!intent) return null
   const destination = toDestination(intent)

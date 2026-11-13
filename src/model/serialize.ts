@@ -3,27 +3,28 @@
  * to be understood by reading it. Export only; Krijt never imports it
  * (session recovery uses the internal document format instead).
  *
- *   Klant
+ *   KLANT
  *     *klantnr*
  *     naam
  *
  *   #1
  *     *ordernr*
- *     klantnr → Klant.klantnr
- *     totaal/°
+ *     klantnr → KLANT.klantnr
+ *     /totaal°
  *
  *   #2
  *     ordernr
  *     regelnr
  *     datum
- *     (ordernr, regelnr) → Regel(ordernr, regelnr)
+ *     (ordernr, regelnr) → REGEL(ordernr, regelnr)
  *
  * - One block per table, in diagram order, separated by an empty line. The first line is the table's name; a
  *   repeated name gets a suffix by occurrence (the second "Klant" is "Klant#2"); unnamed tables are "#1", "#2", ….
  * - Then the columns, indented two spaces, in diagram order. A repeated column name gets the same suffix ("x#2").
- * - A primary key is wrapped in asterisks: "*klantnr*". Then come `/` calculated and `°` nullable, in the diagram's
- *   order ("totaal/°"; a calculated key: "*x*" followed by "/"). A duplicate suffix belongs to the name, inside the
- *   asterisks ("*x#2*").
+ * - Calculated is a `/` in front and nullable a `°` after, as in the diagram ("/totaal°"). A primary key is wrapped
+ *   in asterisks around the whole column as written ("*klantnr*"; a calculated, nullable key is "/totaal°" between
+ *   asterisks), so an asterisk never follows the slash (that would read as the start of an SQL comment). A duplicate suffix belongs to the name, inside the asterisks ("*x#2*").
+ * - Table names are in capitals, as in the diagram ("KLANT"); names that differ only in case count as repeated.
  * - Names contain only letters, digits, dashes and underscores (see names.ts), so none of the notation can be part
  *   of a name, and the text is unambiguous.
  * - Single-column references are written on their column: "klantnr → Klant.klantnr"; several from one column are
@@ -35,6 +36,7 @@
  *
  * The same diagram always gives the same text.
  */
+import { tableNameText } from './names'
 import type { Attribute, Id, KrijtDocument, Reference } from './types'
 
 export type ExportTable = {
@@ -45,9 +47,10 @@ export type ExportTable = {
   references: string[]
 }
 
-/** A column as written: `*name*` for a primary key, then `/` calculated and `°` nullable, in that order. */
+/** A column as written: `/` calculated, the name, `°` nullable; a primary key wraps all of it in asterisks. */
 export function notated(a: Attribute, name: string): string {
-  return (a.primaryKey ? `*${name}*` : name) + (a.calculated ? '/' : '') + (a.nullable ? '°' : '')
+  const written = (a.calculated ? '/' : '') + name + (a.nullable ? '°' : '')
+  return a.primaryKey ? `*${written}*` : written
 }
 
 /** Names made unique by occurrence: the first keeps its name, later ones get "#2", "#3", …; null names become "#1", "#2", …. */
@@ -64,7 +67,7 @@ function uniqueNames<T>(items: T[], name: (t: T) => string | null): string[] {
 
 export function exportTables(doc: KrijtDocument): ExportTable[] {
   const tableNames = new Map<Id, string>()
-  uniqueNames(doc.relations, (r) => r.name).forEach((n, i) => tableNames.set(doc.relations[i]!.id, n))
+  uniqueNames(doc.relations, (r) => (r.name === null ? null : tableNameText(r.name))).forEach((n, i) => tableNames.set(doc.relations[i]!.id, n))
   const columnNames = new Map<Id, string>()
   for (const r of doc.relations) uniqueNames(r.attributes, (a) => a.name).forEach((n, i) => columnNames.set(r.attributes[i]!.id, n))
   const col = (id: Id) => columnNames.get(id) ?? '?'

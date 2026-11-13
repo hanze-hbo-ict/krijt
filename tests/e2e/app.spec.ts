@@ -132,7 +132,7 @@ test('add fields to an existing table, type attributes directly, and name the ta
   const name = page.getByLabel('Table name (leave empty for an unnamed table)')
   await name.fill('Bestelling')
   await name.press('Enter')
-  await expect(page.locator('.relation-name')).toHaveText('Bestelling')
+  await expect(page.locator('.relation-name')).toHaveText('BESTELLING')
   await expect(cell(page, 'A', 'table Bestelling')).toBeVisible()
   await page.getByRole('button', { name: 'Rename table' }).click()
   await name.fill('')
@@ -222,7 +222,9 @@ test('typing in a name field does not trigger shortcuts', async ({ page }) => {
   await name.press('ArrowLeft')
   await name.press('Escape') // cancels the edit only
   await expect(name).toHaveCount(0)
-  await expect(page.locator('.relation-name')).toHaveText('Add name')
+  // No name was saved (the "Add name" placeholder does not fit over a one-cell table; the toolbar offers it instead).
+  await expect(page.locator('.relation-name')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Name table' })).toBeVisible()
   const after = (await cell(page, 'K').boundingBox())!
   expect(after.x).toBe(before.x)
   // The table is still selected; a second Escape clears that.

@@ -62,7 +62,8 @@ operation needs a modifier key.
   selection shows a mixed state), **Move left / right** (also ← →), **Move**, **Copy**, **Reference**,
   **Delete** (also Del/Backspace).
 - **Notation**: primary key **bold and underlined** (several per table for a composite key), nullable with a real
-  superscript `o`, calculated with a `/` suffix, both as `name/ᵒ`. Notation is rendered from flags, never stored in names.
+  superscript `o`, calculated with a `/` in front, both as `/nameᵒ`. Table names are shown in capitals, right-aligned
+  over the strip (the stored name keeps its case). Notation is rendered from flags, never stored in names.
 - **Move / Copy** act on the selection: the button stays pressed, and the next click on the canvas is the
   destination: a table header (append), a cell's left/right half (insert), or empty canvas (new unnamed table).
   Hovering (or keyboard focus) shows a preview: an insertion bar, or the outline of the new table. Afterwards the moved
@@ -131,16 +132,16 @@ diagram and says so.
 - **Copy as text** puts the diagram on the clipboard as plain text, meant to be understood by reading it:
 
   ```text
-  Klant
+  KLANT
     *klantnr*
     naam
 
   #1
     *ordernr*
-    klantnr → Klant.klantnr
-    totaal/°
+    klantnr → KLANT.klantnr
+    /totaal°
 
-  Regel
+  REGEL
     *ordernr*
     *regelnr*
 
@@ -148,13 +149,15 @@ diagram and says so.
     ordernr
     regelnr
     datum
-    (ordernr, regelnr) → Regel(ordernr, regelnr)
+    (ordernr, regelnr) → REGEL(ordernr, regelnr)
   ```
 
-  One block per table, in diagram order, separated by an empty line: the table's name, then its columns indented two
-  spaces. A repeated name gets a suffix by occurrence (`Klant#2`, `x#2`); unnamed tables are `#1`, `#2`, ….
-  A primary key is wrapped in asterisks (`*klantnr*`, `*x#2*`); then come `/` calculated and `°` nullable, in the
-  diagram's order (`totaal/°`). Single-column references are written on their column (`klantnr → Klant.klantnr`;
+  One block per table, in diagram order, separated by an empty line: the table's name in capitals, as in the diagram,
+  then its columns indented two spaces. A repeated name (ignoring case) gets a suffix by occurrence (`KLANT#2`,
+  `x#2`); unnamed tables are `#1`, `#2`, …. Calculated is a `/` in front and nullable a `°` after, as
+  in the diagram (`/totaal°`). A primary key wraps the whole column in asterisks (`*klantnr*`, `*/totaal°*`, `*x#2*`),
+  so `/*` (an SQL comment opener) never appears. Single-column references are
+  written on their column (`klantnr → KLANT.klantnr`;
   several from one column comma-separated: `ref → A.id, B.id`). A composite reference is a line of its own after the
   columns, columns paired in order. References use names without the notation. Table positions and the form-field
   list are not exported. Same diagram, same text; no internal IDs. Export only: there is no import. Disabled while
@@ -320,7 +323,7 @@ E2E hook fails any test that triggers a request to another host.
 
 - **Export (M4)** is drawn on a 2D canvas from a pure scene (`exportScene`), built from the same `layoutRelation` /
   `layoutReferences` and measurer as the screen, rather than by serializing the on-screen SVG; this needs no font
-  embedding and guarantees no editor chrome leaks in. Table names sit above the strip, left-aligned.
+  embedding and guarantees no editor chrome leaks in. Table names sit above the strip, in capitals, right-aligned with its end.
 - **Clipboard timing**: the image write starts synchronously in the click with the PNG as a promise in
   `ClipboardItem` (required by Safari); if a browser rejects that for a reason other than permission, it retries once
   with the finished blob.
@@ -336,7 +339,7 @@ E2E hook fails any test that triggers a request to another host.
   writes only from version 127.
 - **Routing is per reference** and ignores other tables: a connector can cross an unrelated table or its header band
   (it then wins clicks there; the header's grip end stays clickable), and an end on a strip's top edge sits in the
-  header band, where a brace can overlap the grip or the start of a long table name. Students can rearrange tables;
+  header band, where a brace can overlap the grip or a long table name. Students can rearrange tables;
   better routing is a Milestone 5 item if real diagrams need it.
 - **Text measurement**: widths come from canvas `measureText` with the system font stack (no bundled font). Screen and
   PNG share the measurer and the font, so a picture is always consistent in itself, but pictures differ slightly

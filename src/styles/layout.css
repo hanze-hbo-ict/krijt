@@ -803,6 +803,15 @@ textarea:focus-visible {
   background: var(--panel);
   z-index: 5;
 }
+/* Table names show in capitals, right-aligned; the editor matches (the stored name keeps its case). */
+.name-input {
+  text-align: right;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.name-input::placeholder {
+  text-transform: none;
+}
 
 /* Context toolbar: icon-only actions floating next to the selection. Placed by SelectionToolbar. */
 .selection-toolbar {
@@ -855,8 +864,22 @@ textarea:focus-visible {
   font-weight: 500;
   line-height: 1;
 }
-.glyph sup {
+/* The marks around the "a" take no width, so the "a" itself is centred and level in every button. */
+.glyph {
+  position: relative;
+}
+.glyph-before,
+.glyph-after {
+  position: absolute;
+}
+.glyph-before {
+  right: 100%;
+}
+.glyph-after {
+  left: calc(100% + 1px);
+  top: -0.3em;
   font-size: 10px;
+  line-height: 1;
 }
 .glyph.notation-pk {
   font-weight: 750;

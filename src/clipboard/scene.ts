@@ -11,6 +11,7 @@
  */
 import { contentBounds, fontFor, labelParts, layoutRelation, METRICS, type Rect, type RelationLayout, type TextMeasurer } from '../geometry/layout'
 import { layoutReferences, polylinePath, REFERENCE_METRICS } from '../geometry/references'
+import { tableNameText } from '../model/names'
 import type { Id, KrijtDocument } from '../model/types'
 
 export const EXPORT_INK = '#111827'
@@ -48,8 +49,8 @@ function relationOps(layout: RelationLayout, doc: KrijtDocument, relationId: Id,
   if (r.name) {
     ops.push({
       kind: 'text',
-      text: r.name,
-      x: layout.x,
+      text: tableNameText(r.name),
+      x: layout.x + layout.stripWidth - METRICS.namePadding - m.width(tableNameText(r.name), 'label'),
       y: layout.header.y + layout.header.height / 2 + METRICS.labelSize * 0.35,
       font: fontFor('label'),
     })
@@ -63,9 +64,11 @@ function relationOps(layout: RelationLayout, doc: KrijtDocument, relationId: Id,
     const slashWidth = parts.slash ? m.width('/', 'suffix') : 0
     const total = nameWidth + slashWidth + (parts.superO ? 1 + m.width('o', 'superscript') : 0)
     const x = c.x + (c.width - total) / 2
-    if (parts.name) ops.push({ kind: 'text', text: parts.name, x, y: textY, font: fontFor(parts.bold ? 'bold' : 'regular') })
-    if (parts.underline && nameWidth > 0) ops.push({ kind: 'line', x1: x, y1: textY + 3, x2: x + nameWidth, y2: textY + 3, lineWidth: UNDERLINE })
-    if (parts.slash) ops.push({ kind: 'text', text: '/', x: x + nameWidth, y: textY, font: fontFor('suffix') })
+    // Calculated: the slash comes first; the key underline runs under the name only.
+    if (parts.slash) ops.push({ kind: 'text', text: '/', x, y: textY, font: fontFor('suffix') })
+    const nameX = x + slashWidth
+    if (parts.name) ops.push({ kind: 'text', text: parts.name, x: nameX, y: textY, font: fontFor(parts.bold ? 'bold' : 'regular') })
+    if (parts.underline && nameWidth > 0) ops.push({ kind: 'line', x1: nameX, y1: textY + 3, x2: nameX + nameWidth, y2: textY + 3, lineWidth: UNDERLINE })
     if (parts.superO) ops.push({ kind: 'text', text: 'o', x: x + nameWidth + slashWidth + 1, y: textY - 6, font: fontFor('superscript') })
   })
 }

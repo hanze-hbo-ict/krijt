@@ -5,7 +5,8 @@
  */
 import { memo } from 'react'
 import type { Attribute, Id, Relation } from '../model/types'
-import { labelParts, labelWidth, METRICS, type RelationLayout, type TextMeasurer } from '../geometry/layout'
+import { fitsInBand, labelParts, labelWidth, METRICS, type RelationLayout, type TextMeasurer } from '../geometry/layout'
+import { tableNameText } from '../model/names'
 
 /** A cell's part in a reference being created or selected; `index` numbers composite ends (1-based). */
 export type CellMark = { role: 'source' | 'target'; index?: number }
@@ -32,18 +33,19 @@ export function relationLabel(r: Relation): string {
 function AttributeText({ attribute, x, y, measurer }: { attribute: Attribute; x: number; y: number; measurer: TextMeasurer }) {
   const parts = labelParts(attribute)
   const nameWidth = measurer.width(parts.name, parts.bold ? 'bold' : 'regular')
+  const nameX = x + (parts.slash ? measurer.width('/', 'suffix') : 0)
   return (
     <>
       <text x={x} y={y} className="attr-text" fontWeight={parts.bold ? 700 : 400}>
-        <tspan>{parts.name}</tspan>
         {parts.slash && <tspan fontWeight={400}>/</tspan>}
+        <tspan>{parts.name}</tspan>
         {parts.superO && (
           <tspan fontWeight={400} fontSize={METRICS.superscriptSize} dx={1} dy={-6}>
             o
           </tspan>
         )}
       </text>
-      {parts.underline && nameWidth > 0 && <line className="attr-underline" x1={x} x2={x + nameWidth} y1={y + 3} y2={y + 3} />}
+      {parts.underline && nameWidth > 0 && <line className="attr-underline" x1={nameX} x2={nameX + nameWidth} y1={y + 3} y2={y + 3} />}
     </>
   )
 }
@@ -94,19 +96,23 @@ export const RelationView = memo(function RelationView({
             className="relation-name"
             data-kind="relationName"
             data-relation={relation.id}
-            x={header.x + METRICS.gripWidth}
+            x={layout.x + layout.stripWidth - METRICS.namePadding}
             y={header.y + header.height / 2 + METRICS.labelSize * 0.35}
+            textAnchor="end"
           >
-            {relation.name}
+            {tableNameText(relation.name)}
           </text>
         ) : (
-          selected && (
+          // On a table too narrow for it, the toolbar's Name table does the same.
+          selected &&
+          fitsInBand(layout, 'Add name', measurer) && (
             <text
               className="relation-name placeholder"
               data-kind="relationName"
               data-relation={relation.id}
-              x={header.x + METRICS.gripWidth}
+              x={layout.x + layout.stripWidth - METRICS.namePadding}
               y={header.y + header.height / 2 + METRICS.labelSize * 0.35}
+              textAnchor="end"
             >
               Add name
             </text>

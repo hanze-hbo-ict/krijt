@@ -47,7 +47,9 @@ export function SelectionToolbar({ state, dispatch, anchor, bounds }: Props) {
     let top: number
     let place: string
     if (anchor.side === 'above') {
-      left = clamp(rect.left + rect.width / 2 - w / 2, w, bounds.width)
+      // Start at the selection's left edge, not its centre: marking a key widens the cell (bold), and the bar must
+      // not move under the pointer when that happens.
+      left = clamp(rect.left, w, bounds.width)
       const above = rect.top - GAP - h
       const below = rect.top + rect.height + GAP
       place = above >= EDGE || below + h > bounds.height - EDGE ? 'above' : 'below'
@@ -128,7 +130,10 @@ function ToolButton({
 
 const Separator = () => <span className="toolbar-separator" aria-hidden="true" />
 
-/** The flags are shown in the diagram's own notation, so the button looks like what it does. */
+/**
+ * The flags are shown in the diagram's own notation, so the button looks like what it does. The "a" is centred in
+ * every button; the slash and the superscript o hang off its sides, so the three a's line up.
+ */
 const FLAGS: { flag: AttributeFlag; name: string; glyph: ReactNode }[] = [
   { flag: 'primaryKey', name: 'Primary key', glyph: <span className="glyph notation-pk">a</span> },
   {
@@ -136,11 +141,16 @@ const FLAGS: { flag: AttributeFlag; name: string; glyph: ReactNode }[] = [
     name: 'Nullable',
     glyph: (
       <span className="glyph">
-        a<sup>o</sup>
+        a<sup className="glyph-after">o</sup>
       </span>
     ),
   },
-  { flag: 'calculated', name: 'Calculated', glyph: <span className="glyph">a/</span> },
+  { flag: 'calculated', name: 'Calculated', glyph: (
+      <span className="glyph">
+        <span className="glyph-before">/</span>a
+      </span>
+    ),
+  },
 ]
 
 function findAttributes(doc: KrijtDocument, ids: string[]): Attribute[] {

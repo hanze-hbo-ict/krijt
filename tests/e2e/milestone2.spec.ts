@@ -127,8 +127,8 @@ test('notation: primary key bold and underlined, nullable superscript o, calcula
   const korting = cellIn(rel, 'Korting').locator('tspan')
   await expect(korting).toHaveText(['Korting', 'o'])
   await expect(korting.nth(1)).toHaveAttribute('dy', '-6')
-  // Calculated + nullable: name, then /, then superscript o.
-  await expect(cellIn(rel, 'Subtotaal').locator('tspan')).toHaveText(['Subtotaal', '/', 'o'])
+  // Calculated + nullable: /, then the name, then superscript o.
+  await expect(cellIn(rel, 'Subtotaal').locator('tspan')).toHaveText(['/', 'Subtotaal', 'o'])
 
   // Mixed selection shows a mixed state; the toggle then sets the flag on all. Shift-click adds too.
   await cellIn(rel, 'Ordernr').click({ modifiers: ['Shift'] })

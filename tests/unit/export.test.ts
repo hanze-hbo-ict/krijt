@@ -11,7 +11,7 @@ import {
   MAX_EXPORT_SIDE,
   type SceneOp,
 } from '../../src/clipboard/scene'
-import { contentBounds, estimateMeasurer as m, fontFor, layoutRelation } from '../../src/geometry/layout'
+import { contentBounds, estimateMeasurer as m, fontFor, layoutRelation, METRICS } from '../../src/geometry/layout'
 import { exportTables, serializeDocument } from '../../src/model/serialize'
 import { emptyDocument, newAttribute, type KrijtDocument, type Reference, type Relation } from '../../src/model/types'
 import { readSession, SESSION_KEY, serializeSession } from '../../src/persistence/session'
@@ -56,16 +56,18 @@ describe('export scene', () => {
     const pk = t.find((o) => o.text === 'klantnr' && o.font === fontFor('bold'))!
     const underline = scene.ops.find((o) => o.kind === 'line')!
     expect(underline).toMatchObject({ x1: pk.x, x2: pk.x + m.width('klantnr', 'bold'), y1: pk.y + 3 })
-    // Calculated + nullable: name, then "/", then a raised, smaller "o".
+    // Calculated + nullable: "/" first, then the name, then a raised, smaller "o".
     const name = t.find((o) => o.text === 'totaal')!
     const slash = t.find((o) => o.text === '/')!
     const o = t.find((x) => x.text === 'o')!
-    expect(slash.x).toBeCloseTo(name.x + m.width('totaal', 'regular'))
-    expect(o.x).toBeGreaterThan(slash.x)
+    expect(name.x).toBeCloseTo(slash.x + m.width('/', 'suffix'))
+    expect(o.x).toBeGreaterThan(name.x + m.width('totaal', 'regular'))
     expect(o.y).toBe(name.y - 6)
     expect(o.font).toBe(fontFor('superscript'))
-    // Table names appear only for named tables; nothing like "Unnamed" or "Add name".
-    expect(t.map((x) => x.text)).toContain('Klant')
+    // Table names appear only for named tables, in capitals and right-aligned over the strip; nothing like "Unnamed".
+    const klant = t.find((x) => x.text === 'KLANT')!
+    const strip = layoutRelation(sample().relations[0]!, m)
+    expect(klant.x + m.width('KLANT', 'label')).toBeCloseTo(strip.x + strip.stripWidth - METRICS.namePadding)
     expect(t.some((x) => /unnamed|add name|\+/i.test(x.text))).toBe(false)
     // One rectangle per attribute, and nothing for header bands or + cells.
     expect(scene.ops.filter((x) => x.kind === 'rect')).toHaveLength(10)
@@ -196,17 +198,17 @@ describe('copy data', () => {
     expect(await copyText({ isSecureContext: false, clipboard: { writeText: async () => undefined } }, 'x')).toMatchObject({ reason: 'insecure' })
   })
 
-  it('describes the diagram as plain text: a block per table, *keys*, / and ° suffixes, references inline', () => {
+  it('describes the diagram as plain text: a block per table, *keys*, / and °, references inline', () => {
     expect(serializeDocument(sample())).toBe(
       [
-        'Klant',
+        'KLANT',
         '  *klantnr*',
         '  naam',
         '',
         '#1',
         '  ordernr',
-        '  klantnr → Klant.klantnr',
-        '  totaal/°',
+        '  klantnr → KLANT.klantnr',
+        '  /totaal°',
         '',
         '#2',
         '  ordernr',
@@ -231,17 +233,17 @@ describe('copy data', () => {
     expect(serializeDocument(structuredClone(doc))).toBe(text)
   })
 
-  it('suffixes repeated table and column names by occurrence, and numbers unnamed tables', () => {
-    const doc = docWith([rel('a', ['x'], 0, 0, 'Foo'), rel('b', ['x', 'x'], 0, 100), rel('c', ['y'], 0, 200, 'Foo'), rel('d', ['z'], 0, 300)])
+  it('suffixes repeated table names (ignoring case) and column names by occurrence, and numbers unnamed tables', () => {
+    const doc = docWith([rel('a', ['x'], 0, 0, 'Foo'), rel('b', ['x', 'x'], 0, 100), rel('c', ['y'], 0, 200, 'FOO'), rel('d', ['z'], 0, 300)])
     doc.relations[1]!.attributes[1] = { ...doc.relations[1]!.attributes[1]!, id: 'b.x#2' }
     doc.references = [ref('r', ['d', ['d.z']], ['b', ['b.x#2']])]
     const out = exportTables(doc)
-    expect(out.map((t) => t.name)).toEqual(['Foo', '#1', 'Foo#2', '#2'])
+    expect(out.map((t) => t.name)).toEqual(['FOO', '#1', 'FOO#2', '#2'])
     expect(out[1]!.columns).toEqual(['x', 'x#2'])
     expect(out[3]!.columns).toEqual(['z → #1.x#2'])
   })
 
-  it('wraps keys in asterisks (duplicate suffix inside), then / and °, and never marks references', () => {
+  it('writes / before and ° after the name, wraps keys whole in asterisks (duplicate suffix inside), never marks references', () => {
     const t = rel('t', ['a', 'b', 'c', 'd', 'a'])
     const set = (i: number, f: Partial<Record<'primaryKey' | 'nullable' | 'calculated', boolean>>) =>
       (t.attributes[i] = { ...t.attributes[i]!, ...f })
@@ -252,7 +254,7 @@ describe('copy data', () => {
     t.attributes[4] = { ...t.attributes[4]!, id: 't.a#2' }
     const u = rel('u', ['fk'], 0, 200)
     const out = exportTables(docWith([t, u], [ref('r', ['u', ['u.fk']], ['t', ['t.a']])]))
-    expect(out[0]!.columns).toEqual(['*a*/°', 'b°', 'c/', 'd', '*a#2*'])
+    expect(out[0]!.columns).toEqual(['*/a°*', 'b°', '/c', 'd', '*a#2*'])
     expect(out[1]!.columns).toEqual(['fk → #1.a'])
   })
 

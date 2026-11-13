@@ -34,12 +34,12 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
               <td>Nullable</td>
             </tr>
             <tr>
-              <td>naam/</td>
+              <td>/naam</td>
               <td>Calculated</td>
             </tr>
             <tr>
               <td>
-                naam/<sup>o</sup>
+                /naam<sup>o</sup>
               </td>
               <td>Calculated and nullable</td>
             </tr>
@@ -132,7 +132,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
           </li>
           <li>
             <strong>Copy as text</strong> copies the diagram as plain text: each table's name (unnamed ones as #1, #2, …) with its columns indented below,
-            with *keys* in asterisks, / for calculated, ° for nullable, and references written as “klantnr → Klant.klantnr”.
+            with / before a calculated column, ° after a nullable one, *keys* in asterisks around all of it (*/totaal°*), and references written as “klantnr → KLANT.klantnr”.
             Use it when text answers are allowed. Krijt cannot load it back.
           </li>
           <li>Krijt never downloads or uploads files.</li>

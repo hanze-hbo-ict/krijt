@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contentBounds, estimateMeasurer as m, labelParts, labelWidth, layoutRelation, METRICS } from '../../src/geometry/layout'
+import { contentBounds, estimateMeasurer as m, fitsInBand, labelParts, labelWidth, layoutRelation, METRICS, tableNameBox } from '../../src/geometry/layout'
 import { fitToBounds, MAX_ZOOM, MIN_ZOOM, screenToWorld, worldToScreen, zoomAt } from '../../src/geometry/viewport'
 import { emptyDocument, newAttribute, type Relation } from '../../src/model/types'
 
@@ -25,14 +25,21 @@ describe('strip layout', () => {
   it('puts the header band above the strip and the + cell after it', () => {
     const l = layoutRelation(rel(['a'], 0, 100), m)
     expect(l.header.y + l.header.height).toBeLessThanOrEqual(100)
-    expect(l.header.width).toBeGreaterThanOrEqual(METRICS.headerMinWidth)
+    expect(l.header).toMatchObject({ x: 0, width: l.stripWidth }) // exactly as wide as the table
     expect(l.addCell.x).toBe(l.stripWidth + METRICS.addCellGap)
   })
 
-  it('widens the header for a long name', () => {
-    const name = 'Bestellingregel met een lange naam'
+  it('keeps the band at the table width, growing to the left only for a name that needs more room', () => {
+    expect(layoutRelation(rel(['a', 'b', 'c', 'd'], 0, 0, 'K'), m).header).toMatchObject({ x: 0, width: layoutRelation(rel(['a', 'b', 'c', 'd']), m).stripWidth })
+    const name = 'Bestellingregel'
     const l = layoutRelation(rel(['a'], 0, 0, name), m)
-    expect(l.header.width).toBeGreaterThan(l.stripWidth)
+    expect(l.header.x + l.header.width).toBe(l.stripWidth) // the band still ends where the strip ends
+    const box = tableNameBox(l, name, m)
+    expect(box.x + box.width).toBe(l.stripWidth) // right-aligned over the strip's end
+    expect(box.x).toBeGreaterThanOrEqual(l.header.x + METRICS.gripWidth) // inside the band, beside the grip
+    // "Add name" never widens the band: it shows only where it fits.
+    expect(fitsInBand(layoutRelation(rel(['a']), m), 'Add name', m)).toBe(false)
+    expect(fitsInBand(layoutRelation(rel(['a', 'b', 'c', 'd']), m), 'Add name', m)).toBe(true)
   })
 
   it('accounts for notation in the cell width without storing it in the name', () => {

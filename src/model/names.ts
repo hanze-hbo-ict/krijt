@@ -35,3 +35,8 @@ export function toValidName(label: string): string {
 export function typedName(text: string): string {
   return text.replace(/\s/gu, '_').replace(INVALID_CHAR, '')
 }
+
+/** Table names are shown in capitals, in the diagram and in both exports; the stored name keeps its case. */
+export function tableNameText(name: string): string {
+  return name.toUpperCase()
+}

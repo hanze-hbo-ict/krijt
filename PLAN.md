@@ -28,7 +28,7 @@ A student can paste a list of source fields, create and split tables, copy keys,
 - Create unnamed tables; names can be added/edited/removed at any time.
 - Add/rename/delete/reorder/select attributes in a table; multi-selection across or within tables.
 - Move and copy attribute selections to existing tables or into new tables on empty canvas, by clicks; optional drag moves by default.
-- Primary-key marking (**bold and underlined**), nullable marking (**superscript `o` suffix**), calculated marking (**`/` suffix**).
+- Primary-key marking (**bold and underlined**), nullable marking (**superscript `o` suffix**), calculated marking (**`/` prefix**). *(Revised: calculated is a prefix, `/naam`.)*
 - Create/delete single and composite foreign-key references with a click-based, two-ended selection workflow. Composite references are represented by **curly braces at both ends**.
 - Context toolbar + keyboard shortcuts; clear operation state and Escape-to-cancel.
 - Undo/redo covering all document edits and diagram-position changes.
@@ -57,11 +57,11 @@ Treat the diagram as **semantically structured data**, not a collection of indep
 
 | Meaning | Rendered form |
 |---|---|
-| Table/relation | Horizontal strip of adjacent attribute cells; name optional, shown above or beside strip |
+| Table/relation | Horizontal strip of adjacent attribute cells; name optional, shown above the strip, right-aligned, in capitals |
 | Primary key attribute | Attribute name **bold and underlined** |
 | Nullable | Superscript `o` after attribute name (not a baseline `o`, a zero, or `?`) |
-| Calculated/derived | `/` suffix after attribute name |
-| Nullable + calculated | Name followed by `/` and then superscript `o` (consistent ordering) |
+| Calculated/derived | `/` prefix before attribute name |
+| Nullable + calculated | `/`, then the name, then superscript `o` |
 | Single foreign key | A directional connector from referencing attribute to referenced attribute |
 | Composite foreign key | Explicitly selected source and target attribute groups, visually bracketed by **curly braces on both ends**, with a single connector between groups |
 

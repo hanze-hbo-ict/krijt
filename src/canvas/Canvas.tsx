@@ -408,7 +408,7 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
       const l = layouts.get(selection.relationId)
       if (!l) return null
       const top = Math.min(l.header.y, l.y)
-      return { rect: toScreen(l.x, top, Math.max(l.stripWidth, l.header.width), l.y + l.height - top), side: 'above' }
+      return { rect: toScreen(Math.min(l.x, l.header.x), top, Math.max(l.stripWidth, l.header.width), l.y + l.height - top), side: 'above' }
     }
     if (selection.kind === 'reference') {
       const g = referenceGeometry.find((x) => x.referenceId === selection.referenceId)
@@ -511,12 +511,14 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
           const l = layouts.get(editing.relationId)
           const r = doc.relations.find((x) => x.id === editing.relationId)
           if (!l || !r) return null
+          // Right-aligned like the name it edits: its right edge stays at the strip's right edge.
+          const width = Math.max(180, l.header.width - METRICS.gripWidth + 4)
           return (
             <InlineInput
               key={`name-${r.id}`}
               className="canvas-input name-input"
               style={{
-                ...screenRect(l.header.x + METRICS.gripWidth - 4, l.header.y, Math.max(180, l.header.width), l.header.height),
+                ...screenRect(l.x + l.stripWidth - width, l.header.y, width, l.header.height),
                 fontSize: METRICS.labelSize * viewport.zoom,
               }}
               initial={r.name ?? ''}

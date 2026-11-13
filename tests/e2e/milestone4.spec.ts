@@ -18,7 +18,7 @@ const attr = (id: string, name: string, flags: Partial<Record<'primaryKey' | 'nu
   ...flags,
 })
 
-/** Klant(klantnr PK, naam), Order(ordernr PK, klantnr, totaal /ᵒ) → Klant; Levering(ordernr, regelnr) → Regel(ordernr, regelnr). */
+/** Klant(klantnr PK, naam), Order(ordernr PK, klantnr, /totaal ᵒ) → Klant; Levering(ordernr, regelnr) → Regel(ordernr, regelnr). */
 const SAMPLE = {
   format: 'krijt',
   version: 1,
@@ -121,16 +121,16 @@ test.describe('real clipboard (Chromium)', () => {
     const text = await page.evaluate(() => navigator.clipboard.readText())
     expect(text).toBe(
       [
-        'Klant',
+        'KLANT',
         '  *klantnr*',
         '  naam',
         '',
         '#1',
         '  *ordernr*',
-        '  klantnr → Klant.klantnr',
-        '  totaal/°',
+        '  klantnr → KLANT.klantnr',
+        '  /totaal°',
         '',
-        'Regel',
+        'REGEL',
         '  *ordernr*',
         '  *regelnr*',
         '',
@@ -138,7 +138,7 @@ test.describe('real clipboard (Chromium)', () => {
         '  ordernr',
         '  regelnr',
         '  datum',
-        '  (ordernr, regelnr) → Regel(ordernr, regelnr)',
+        '  (ordernr, regelnr) → REGEL(ordernr, regelnr)',
         '',
       ].join('\n'),
     )
@@ -289,5 +289,5 @@ test('names accept letters of any script, dashes and underscores; typing a space
   await input.pressSequentially('Klant gegevens (€) 2-a')
   await expect(input).toHaveValue('Klant_gegevens__2-a')
   await input.press('Enter')
-  await expect(page.locator('.relation-name')).toHaveText('Klant_gegevens_2-a')
+  await expect(page.locator('.relation-name')).toHaveText('KLANT_GEGEVENS_2-A')
 })

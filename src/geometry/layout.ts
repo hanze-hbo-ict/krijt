@@ -5,6 +5,7 @@
  * the diagram font (measure.ts), in tests a deterministic estimate. The same
  * layout feeds the on-screen canvas and, later, the PNG export renderer.
  */
+import { tableNameText } from '../model/names'
 import type { Attribute, Id, KrijtDocument, Relation } from '../model/types'
 import { layoutReferences } from './references'
 
@@ -23,7 +24,6 @@ export const METRICS = {
   cellMinWidth: 44,
   /** Header band above the strip: the table's move handle and name. */
   headerHeight: 24,
-  headerMinWidth: 96,
   /** The grip at the start of the header band, editor only. */
   gripWidth: 20,
   /** The "+" cell after the last attribute, editor only. */
@@ -31,6 +31,8 @@ export const METRICS = {
   addCellGap: 6,
   /** Gap between the name/handle row and the strip. */
   headerGap: 2,
+  /** Table names are right-aligned: this far in from the strip's right edge. */
+  namePadding: 6,
 } as const
 
 export const DIAGRAM_FONT_FAMILY = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
@@ -50,7 +52,7 @@ export function fontFor(style: TextStyle): string {
 
 /**
  * How an attribute is written: its stored name plus notation. The notation is
- * derived from flags, never stored in the name. Order: name, `/`, superscript o.
+ * derived from flags, never stored in the name. Order: `/` (calculated), name, superscript o.
  */
 export type LabelParts = { name: string; bold: boolean; underline: boolean; slash: boolean; superO: boolean }
 
@@ -95,8 +97,11 @@ export function layoutRelation(r: Relation, m: TextMeasurer): RelationLayout {
     cursor += width
   }
   const stripWidth = cursor - x
-  const nameWidth = r.name ? METRICS.gripWidth + Math.ceil(m.width(r.name, 'label')) + METRICS.cellPaddingX : 0
   const headerHeight = METRICS.headerHeight
+  // The band is as wide as the strip, unless the name (with the grip beside it) needs more: then it grows to the left,
+  // so the right-aligned name stays over the strip's end and the band's hover and outline always enclose it.
+  const nameNeeds = r.name ? METRICS.gripWidth + Math.ceil(m.width(tableNameText(r.name), 'label')) + METRICS.namePadding : 0
+  const headerWidth = Math.max(stripWidth, nameNeeds)
   return {
     relationId: r.id,
     x,
@@ -105,9 +110,9 @@ export function layoutRelation(r: Relation, m: TextMeasurer): RelationLayout {
     height: METRICS.cellHeight,
     cells,
     header: {
-      x,
+      x: x + stripWidth - headerWidth,
       y: y - headerHeight - METRICS.headerGap,
-      width: Math.max(stripWidth, METRICS.headerMinWidth, nameWidth),
+      width: headerWidth,
       height: headerHeight,
     },
     addCell: { x: cursor + METRICS.addCellGap, y, width: METRICS.addCellWidth, height: METRICS.cellHeight },
@@ -115,6 +120,17 @@ export function layoutRelation(r: Relation, m: TextMeasurer): RelationLayout {
 }
 
 export type Rect = { x: number; y: number; width: number; height: number }
+
+/** Where a table's name is drawn: right-aligned over the strip's end (extending left of the strip when longer). */
+export function tableNameBox(l: RelationLayout, name: string, m: TextMeasurer): Rect {
+  const w = Math.ceil(m.width(tableNameText(name), 'label'))
+  return { x: l.x + l.stripWidth - METRICS.namePadding - w, y: l.header.y, width: w + METRICS.namePadding, height: l.header.height }
+}
+
+/** Whether a text fits in the band beside the grip (used for the "Add name" placeholder, which never widens it). */
+export function fitsInBand(l: RelationLayout, text: string, m: TextMeasurer): boolean {
+  return METRICS.gripWidth + m.width(text, 'label') + METRICS.namePadding <= l.header.width
+}
 
 export function unionRects(rects: Rect[]): Rect | null {
   if (rects.length === 0) return null
@@ -143,11 +159,8 @@ export function contentBounds(doc: KrijtDocument, m: TextMeasurer, editor = true
     const l = layoutRelation(r, m)
     layouts.set(r.id, l)
     rects.push({ x: l.x, y: l.y, width: l.stripWidth, height: l.height })
-    if (editor) {
-      rects.push(l.header, l.addCell)
-    } else if (r.name) {
-      rects.push({ ...l.header, width: Math.ceil(m.width(r.name, 'label')) + 2 * METRICS.cellPaddingX })
-    }
+    if (editor) rects.push(l.header, l.addCell)
+    if (r.name) rects.push(tableNameBox(l, r.name, m))
   }
   for (const g of layoutReferences(doc.references, layouts)) rects.push(g.bounds)
   return unionRects(rects)

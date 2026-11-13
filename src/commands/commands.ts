@@ -13,7 +13,7 @@
 import { isValidName, NAME_RULE } from '../model/names'
 import type { Attribute, Id, KrijtDocument, Point, Reference, ReferenceEnd, Relation, SourceField } from '../model/types'
 
-export type AttributeFlag = 'primaryKey' | 'nullable' | 'calculated'
+export type AttributeFlag = 'primaryKey' | 'optional' | 'calculated'
 
 /** Where moved, copied or placed attributes go. `relationId` of a new table is fresh. */
 export type Destination = { kind: 'table'; relationId: Id; index?: number } | { kind: 'newTable'; relationId: Id; position: Point }

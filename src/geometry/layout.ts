@@ -57,7 +57,7 @@ export function fontFor(style: TextStyle): string {
 export type LabelParts = { name: string; bold: boolean; underline: boolean; slash: boolean; superO: boolean }
 
 export function labelParts(a: Attribute): LabelParts {
-  return { name: a.name, bold: a.primaryKey, underline: a.primaryKey, slash: a.calculated, superO: a.nullable }
+  return { name: a.name, bold: a.primaryKey, underline: a.primaryKey, slash: a.calculated, superO: a.optional }
 }
 
 export function labelWidth(parts: LabelParts, m: TextMeasurer): number {

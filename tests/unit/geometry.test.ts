@@ -44,7 +44,7 @@ describe('strip layout', () => {
 
   it('accounts for notation in the cell width without storing it in the name', () => {
     const plain = newAttribute('x', 'prijs')
-    const marked = { ...plain, primaryKey: true, calculated: true, nullable: true }
+    const marked = { ...plain, primaryKey: true, calculated: true, optional: true }
     expect(labelParts(marked)).toEqual({ name: 'prijs', bold: true, underline: true, slash: true, superO: true })
     expect(labelWidth(labelParts(marked), m)).toBeGreaterThan(labelWidth(labelParts(plain), m))
     expect(marked.name).toBe('prijs')

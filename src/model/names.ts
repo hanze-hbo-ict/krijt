@@ -5,7 +5,7 @@
  * `/`, `°`, `#`, `→`, commas, parentheses and spaces all have a meaning.
  *
  * Form fields follow the same rules: typed text is filtered as it is typed, pasted lines are converted with
- * toValidName. (Fields from older sessions may still hold other characters; placing converts them.)
+ * toValidName, so a field's label is used as the attribute name when it is placed.
  */
 
 const ALLOWED = '\\p{L}\\p{M}\\p{N}\\p{Pd}\\p{Pc}'

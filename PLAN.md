@@ -14,7 +14,7 @@ The UI should feel like the existing lightweight educational tools **Kopje** (`h
 
 ### Definition of done
 
-A student can paste a list of source fields, create and split tables, copy keys, mark primary/nullable/calculated attributes, create single/composite references, arrange the diagram, and **copy the complete diagram as a PNG image** for pasting into an exam answer, without dragging or using keyboard modifiers. They can alternatively **copy JSON as text**. A reload of the same browser tab restores the working session.
+A student can paste a list of source fields, create and split tables, copy keys, mark primary/optional/calculated attributes, create single/composite references, arrange the diagram, and **copy the complete diagram as a PNG image** for pasting into an exam answer, without dragging or using keyboard modifiers. They can alternatively **copy JSON as text**. A reload of the same browser tab restores the working session.
 
 ---
 
@@ -28,7 +28,7 @@ A student can paste a list of source fields, create and split tables, copy keys,
 - Create unnamed tables; names can be added/edited/removed at any time.
 - Add/rename/delete/reorder/select attributes in a table; multi-selection across or within tables.
 - Move and copy attribute selections to existing tables or into new tables on empty canvas, by clicks; optional drag moves by default.
-- Primary-key marking (**bold and underlined**), nullable marking (**superscript `o` suffix**), calculated marking (**`/` prefix**). *(Revised: calculated is a prefix, `/naam`.)*
+- Primary-key marking (**bold and underlined**), optional marking (**superscript `o` suffix**), calculated marking (**`/` prefix**). *(Revised: calculated is a prefix, `/naam`.)*
 - Create/delete single and composite foreign-key references with a click-based, two-ended selection workflow. Composite references are represented by **curly braces at both ends**.
 - Context toolbar + keyboard shortcuts; clear operation state and Escape-to-cancel.
 - Undo/redo covering all document edits and diagram-position changes.
@@ -59,9 +59,9 @@ Treat the diagram as **semantically structured data**, not a collection of indep
 |---|---|
 | Table/relation | Horizontal strip of adjacent attribute cells; name optional, shown above the strip, right-aligned, in capitals |
 | Primary key attribute | Attribute name **bold and underlined** |
-| Nullable | Superscript `o` after attribute name (not a baseline `o`, a zero, or `?`) |
+| Optional | Superscript `o` after attribute name (not a baseline `o`, a zero, or `?`) |
 | Calculated/derived | `/` prefix before attribute name |
-| Nullable + calculated | `/`, then the name, then superscript `o` |
+| Optional + calculated | `/`, then the name, then superscript `o` |
 | Single foreign key | A directional connector from referencing attribute to referenced attribute |
 | Composite foreign key | Explicitly selected source and target attribute groups, visually bracketed by **curly braces on both ends**, with a single connector between groups |
 
@@ -71,7 +71,7 @@ Use real typographic or SVG styling for superscript, underline, and braces. Neve
 
 **Primary keys:** support zero, one, or multiple primary-key attributes per table. Multiple PK attributes form a composite key through individual bold-underlined names; do not assume only a single attribute may be a PK.
 
-**Nullable / calculated / PK:** model as independent flags, even if some combinations are questionable. Do not prevent a student's answer on normalization-theory grounds. Show clear rendering and avoid semantic auto-correction.
+**Optional / calculated / PK:** model as independent flags, even if some combinations are questionable. Do not prevent a student's answer on normalization-theory grounds. Show clear rendering and avoid semantic auto-correction.
 
 ### Suggested TypeScript model
 
@@ -85,7 +85,7 @@ type Attribute = {
   id: Id;
   name: string;
   primaryKey: boolean;
-  nullable: boolean;
+  optional: boolean;
   calculated: boolean;
 };
 
@@ -126,7 +126,7 @@ Maintain viewport zoom/pan and active operation/selection as **UI state**, separ
 - Persistent, resizable left sidebar (e.g. initial width 260–320px) titled **Form fields**. Keep inventory editing compact. *(Revised: no Dutch subtitles on panel headers.)*
 - Main work area: large, pannable, zoomable canvas with whitespace; optional subtle grid. Table strips should be legible at normal zoom.
 - ~~Compact tool strip~~ *(Revised: no tool strip. Every operation starts from the selection, so Select/Move/Copy/Reference tools were redundant; multi-selection is an **Add to selection** toggle in the context toolbar.)*
-- Context toolbar, floating next to the selection (icon-only, with tooltips): rename, primary key, nullable, calculated, reorder, move to, copy to, reference from, delete; for tables: name, add attribute, move, copy, delete; for references: delete, beside the line. Keep primary operations discoverable without relying on right-click.
+- Context toolbar, floating next to the selection (icon-only, with tooltips): rename, primary key, optional, calculated, reorder, move to, copy to, reference from, delete; for tables: name, add attribute, move, copy, delete; for references: delete, beside the line. Keep primary operations discoverable without relying on right-click.
 - During an operation its toolbar button stays pressed; pressing it again cancels, as Escape does. *(Revised: no instruction bar; hover/focus previews on the canvas show what a click will do, and a hidden live region announces the operation for screen readers.)*
 - No heavy property-inspector panel, modal-driven table builder, floating AI/help agent, or excessive chrome.
 
@@ -212,7 +212,7 @@ The application has one **normal selection state** and three **one-shot operatio
 ### 4.7 Other editing behavior
 
 - Allow attributes to be added by typing directly in a table, independent of the inventory.
-- Toggling PK / nullable / calculated changes only the corresponding flag.
+- Toggling PK / optional / calculated changes only the corresponding flag.
 - Deleting an attribute deletes references that become dangling, **with a clear user-facing indication**; one undo restores the entire prior state.
 - Deleting a table deletes its references in the same undoable transaction.
 - Clicking a connector selects it rather than a table below it.
@@ -296,7 +296,7 @@ src/
 ### Important engineering rules
 
 - **Single source of truth** for `KrijtDocument`. Avoid duplicated table/attribute state between canvas and sidebar.
-- Implement operations as tested pure commands (`moveAttributes`, `copyAttributes`, `addReference`, `toggleNullable`, etc.). The UI dispatches commands and does not mutate nested React state directly.
+- Implement operations as tested pure commands (`moveAttributes`, `copyAttributes`, `addReference`, `toggleOptional`, etc.). The UI dispatches commands and does not mutate nested React state directly.
 - State machine examples: `select`, `move.selecting`, `move.destination`, `copy.selecting`, `copy.destination`, `reference.selectingSource`, `reference.selectingTarget`.
 - `Cancel` in an unfinished operation changes **UI state only**, not the document.
 - Centralize selection ordering, target resolution, and group validation; use the same logic for click and drag paths.
@@ -327,7 +327,7 @@ Each milestone should produce a runnable build, relevant tests, and a short manu
 
 - Attribute editing, delete, ordering, multi-selection, selection indications.
 - Move/Copy one-shot modes, destination previews, new table creation on empty canvas.
-- Composite PK markings, nullable superscript `o`, calculated `/`.
+- Composite PK markings, optional superscript `o`, calculated `/`.
 - Robust command history + undo/redo.
 - Optional drag-and-drop for source fields/attributes and table handles.
 
@@ -371,7 +371,7 @@ Automate command/geometry behavior and use browser end-to-end tests for workflow
 4. **Move default:** Move two attributes from a populated table to empty canvas → exactly one new table; source attributes removed; original order preserved.
 5. **Copy:** Copy an attribute to a second table → both attributes exist with different IDs, same display flags, no automatic reference.
 6. **No drag required:** Execute scenarios 2–5 without any pointer drag or modifier key.
-7. **Notation:** Correct bold/underline for PK, superscript `o` for nullable, `/` for calculated, and combined flags both onscreen and in PNG.
+7. **Notation:** Correct bold/underline for PK, superscript `o` for optional, `/` for calculated, and combined flags both onscreen and in PNG.
 8. **Unnamed relations:** Creating a table does not prompt for name; name can be supplied/cleared later; no generated visible `Table 1`.
 9. **Simple reference:** Reference foreign-key attribute → referenced attribute; correct direction; survives table movement.
 10. **Composite reference:** Explicitly select two source and two target attributes; visible braces at **both ends**, single connecting arrow; order preserved in document.

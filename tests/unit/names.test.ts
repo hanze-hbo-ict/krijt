@@ -5,7 +5,7 @@ import { applyCommand } from '../../src/commands/commands'
 import { isValidName, NAME_RULE, toValidName, typedName } from '../../src/model/names'
 import { emptyDocument, newAttribute } from '../../src/model/types'
 import { initialState, reducer } from '../../src/state/appState'
-import { NO_NAME_IN_FIELDS_MESSAGE, resolveCanvasClick } from '../../src/state/interaction'
+import { parseDocument } from '../../src/model/validate'
 
 describe('valid names', () => {
   it('accepts letters and digits of any script, with diacritics, dashes and underscores', () => {
@@ -58,22 +58,9 @@ describe('names in the document', () => {
     expect(addSourceFields(['***', '(…)'])).toBeNull()
   })
 
-  it('fields from an older session (free text) are converted when placed', () => {
-    const doc = { ...emptyDocument(), sourceFields: [{ id: 'f1', label: 'Datum (dd-mm)' }, { id: 'f2', label: '***' }] }
-    let s = initialState(doc)
-    for (const f of s.doc.sourceFields) s = reducer(s, { type: 'toggleField', fieldId: f.id })
-    s = reducer(s, { type: 'startPlace' })
-    s = reducer(s, resolveCanvasClick(s, { kind: 'empty' }, { x: 0, y: 0 })!)
-    expect(s.doc.relations[0]!.attributes.map((a) => a.name)).toEqual(['Datum_dd-mm'])
-    expect(s.doc.sourceFields.map((f) => f.label)).toEqual(['Datum (dd-mm)', '***'])
-  })
-
-  it('an older field with nothing usable explains why nothing is placed', () => {
-    let s = initialState({ ...emptyDocument(), sourceFields: [{ id: 'f1', label: '***' }] })
-    s = reducer(s, { type: 'toggleField', fieldId: 'f1' })
-    s = reducer(s, { type: 'startPlace' })
-    s = reducer(s, resolveCanvasClick(s, { kind: 'empty' }, { x: 0, y: 0 })!)
-    expect(s.doc.relations).toEqual([])
-    expect(s.ui.message?.text).toBe(NO_NAME_IN_FIELDS_MESSAGE)
+  it('a stored field that breaks the name rules makes the document unusable', () => {
+    const doc = { ...emptyDocument(), sourceFields: [{ id: 'f1', label: 'Datum (dd-mm)' }] }
+    expect(parseDocument(JSON.parse(JSON.stringify(doc)))).toBeNull()
+    expect(parseDocument({ ...doc, sourceFields: [{ id: 'f1', label: 'Datum_dd-mm' }] })).not.toBeNull()
   })
 })

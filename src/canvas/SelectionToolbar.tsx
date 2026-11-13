@@ -137,8 +137,8 @@ export const Separator = () => <span className="toolbar-separator" aria-hidden="
 const FLAGS: { flag: AttributeFlag; name: string; glyph: ReactNode }[] = [
   { flag: 'primaryKey', name: 'Primary key', glyph: <span className="glyph notation-pk">a</span> },
   {
-    flag: 'nullable',
-    name: 'Nullable',
+    flag: 'optional',
+    name: 'Optional',
     glyph: (
       <span className="glyph">
         a<sup className="glyph-after">o</sup>

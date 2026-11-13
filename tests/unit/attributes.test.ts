@@ -47,15 +47,15 @@ describe('rename and flags', () => {
   it('toggling one flag changes only that flag, on all selected attributes, across tables', () => {
     let doc = docWith([rel('A', ['x', 'y']), rel('B', ['z'], 100)])
     doc = apply(doc, { type: 'setAttributeFlag', attributeIds: ['A.x', 'B.z'], flag: 'primaryKey', value: true }).doc
-    doc = apply(doc, { type: 'setAttributeFlag', attributeIds: ['A.x'], flag: 'nullable', value: true }).doc
+    doc = apply(doc, { type: 'setAttributeFlag', attributeIds: ['A.x'], flag: 'optional', value: true }).doc
     doc = apply(doc, { type: 'setAttributeFlag', attributeIds: ['A.x'], flag: 'calculated', value: true }).doc
     const [x, y] = doc.relations[0]!.attributes
-    // Questionable combinations (a nullable, calculated key) are kept, never corrected.
-    expect(x).toMatchObject({ name: 'x', primaryKey: true, nullable: true, calculated: true })
-    expect(y).toMatchObject({ primaryKey: false, nullable: false, calculated: false })
+    // Questionable combinations (an optional, calculated key) are kept, never corrected.
+    expect(x).toMatchObject({ name: 'x', primaryKey: true, optional: true, calculated: true })
+    expect(y).toMatchObject({ primaryKey: false, optional: false, calculated: false })
     expect(doc.relations[1]!.attributes[0]!.primaryKey).toBe(true)
-    doc = apply(doc, { type: 'setAttributeFlag', attributeIds: ['A.x'], flag: 'nullable', value: false }).doc
-    expect(doc.relations[0]!.attributes[0]).toMatchObject({ primaryKey: true, nullable: false, calculated: true })
+    doc = apply(doc, { type: 'setAttributeFlag', attributeIds: ['A.x'], flag: 'optional', value: false }).doc
+    expect(doc.relations[0]!.attributes[0]).toMatchObject({ primaryKey: true, optional: false, calculated: true })
   })
 
   it('supports composite keys: several primary-key attributes in one table', () => {
@@ -156,13 +156,13 @@ describe('move', () => {
 describe('copy', () => {
   it('copies with new IDs and the same flags, without references; originals stay', () => {
     let doc = docWith([rel('A', ['id', 'x']), rel('B', ['fk'], 100)], [ref('R', ['B', ['B.fk']], ['A', ['A.id']])])
-    doc = apply(doc, { type: 'setAttributeFlag', attributeIds: ['B.fk'], flag: 'nullable', value: true }).doc
+    doc = apply(doc, { type: 'setAttributeFlag', attributeIds: ['B.fk'], flag: 'optional', value: true }).doc
     const copy = copyAttributes(doc, ['B.fk'], { kind: 'table', relationId: 'A' })!
     const next = apply(doc, copy.command).doc
     const copied = next.relations[0]!.attributes[2]!
     expect(copied.id).toBe(copy.newIds[0])
     expect(copied.id).not.toBe('B.fk')
-    expect(copied).toMatchObject({ name: 'fk', nullable: true, primaryKey: false, calculated: false })
+    expect(copied).toMatchObject({ name: 'fk', optional: true, primaryKey: false, calculated: false })
     expect(names(next, 'B')).toEqual(['fk'])
     expect(next.references).toEqual(doc.references) // no inherited foreign key
   })

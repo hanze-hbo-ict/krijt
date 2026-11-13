@@ -85,9 +85,6 @@ describe('session recovery', () => {
     const doc = sampleDoc()
     const raw = JSON.stringify({ version: 1, doc, ui: { viewport: { x: 0, y: 0, zoom: 99 }, sidebarCollapsed: 'yes', theme: 'sepia' } })
     expect(parseSession(raw)).toEqual({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false, theme: 'system' } })
-    // Sessions from before the collapse button stored a width instead: that is ignored.
-    const old = JSON.stringify({ version: 1, doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarWidth: 320 } })
-    expect(parseSession(old)).toEqual({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false, theme: 'system' } })
   })
 
   it('keeps ticks, and rejects a tick that is not a boolean', () => {

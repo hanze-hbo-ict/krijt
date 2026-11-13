@@ -66,10 +66,10 @@ appearance (system, light, dark).
   mode ends when the selection becomes empty.
 - The **context toolbar** floats next to the selection (above a table or the selected cells; beside a selected
   reference's line), icon-only with tooltips: **Add to selection**, **Rename** (also double-click or Enter), **Primary
-  key**, **Nullable**, **Calculated** (shown in the diagram's notation; each toggles only its own flag; a mixed
+  key**, **Optional**, **Calculated** (shown in the diagram's notation; each toggles only its own flag; a mixed
   selection shows a mixed state), **Move left / right** (also ← →), **Move**, **Copy**, **Reference**,
   **Delete** (also Del/Backspace).
-- **Notation**: primary key **bold and underlined** (several per table for a composite key), nullable with a real
+- **Notation**: primary key **bold and underlined** (several per table for a composite key), optional with a real
   superscript `o`, calculated with a `/` in front, both as `/nameᵒ`. Table names are shown in capitals, right-aligned
   over the strip (the stored name keeps its case). Notation is rendered from flags, never stored in names.
 - **Move / Copy** act on the selection: the button stays pressed, and the next click on the canvas is the
@@ -112,7 +112,7 @@ Cyrillic, … included), dashes (Unicode Pd: `-`, `–`, `—`) and connectors (
 space becomes an underscore and other characters are left out; commands refuse invalid names. Form fields follow
 the same rules: typing filters as above, and a pasted line is converted (each run of other characters becomes one
 underscore, repeated underscores become one and outer ones are dropped; dashes stay: `Datum (dd-mm)` → `Datum_dd-mm`).
-Names and fields from sessions made before these rules still load; placing such a field converts it the same way.
+A placed field's label is the attribute name as it stands.
 
 **Tables**: click the header band to select; **Name table / Rename table** (empty = unnamed), **Add attribute**, **Move
 table** and **Copy table** (then click where it goes; the copy has no name and no references), **Delete table**. Tables also move by dragging the header band or with
@@ -167,7 +167,7 @@ diagram and says so.
 
   One block per table, in diagram order, separated by an empty line: the table's name in capitals, as in the diagram,
   then its columns indented two spaces. A repeated name (ignoring case) gets a suffix by occurrence (`KLANT#2`,
-  `x#2`); unnamed tables are `#1`, `#2`, …. Calculated is a `/` in front and nullable a `°` after, as
+  `x#2`); unnamed tables are `#1`, `#2`, …. Calculated is a `/` in front and optional a `°` after, as
   in the diagram (`/totaal°`). A primary key wraps the whole column in asterisks (`*klantnr*`, `*/totaal°*`, `*x#2*`),
   so `/*` (an SQL comment opener) never appears. Single-column references are
   written on their column (`klantnr → KLANT.klantnr`;
@@ -182,7 +182,7 @@ diagram and says so.
 
 ### Demo scenario (Milestone 4 acceptance)
 
-1. Build a normalization answer with clicks only (Milestones 1–3): tables, keys, nullable/calculated marks, one simple
+1. Build a normalization answer with clicks only (Milestones 1–3): tables, keys, optional/calculated marks, one simple
    and one composite reference.
 2. **Copy as image**, paste into the answer field (or any image-accepting editor) and check that all notation is legible:
    bold underlined keys, superscript `o`, `/`, braces at both ends, arrowheads.
@@ -255,7 +255,7 @@ tests/
 
 **Document.** `KrijtDocument` (`src/model/types.ts`) is the plan's model, unchanged, and the single source of truth.
 Positions of tables are part of the document; viewport, selection, the active operation and inline editing are UI state.
-Notation (PK, nullable, calculated) lives in independent boolean flags, never in the stored name.
+Notation (PK, optional, calculated) lives in independent boolean flags, never in the stored name.
 
 **Commands.** Every edit is a plain-data `Command` applied by the pure `applyCommand(doc, cmd)`, which returns
 `{ ok, doc }` or `{ ok: false, error }` and never mutates its input. Commands carry every ID they introduce

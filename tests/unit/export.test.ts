@@ -34,7 +34,7 @@ function sample(): KrijtDocument {
   const klant = rel('k', ['klantnr', 'naam'], 0, 0, 'Klant')
   klant.attributes[0]!.primaryKey = true
   const order = rel('o', ['ordernr', 'klantnr', 'totaal'], 0, 200)
-  order.attributes[2] = { ...order.attributes[2]!, nullable: true, calculated: true }
+  order.attributes[2] = { ...order.attributes[2]!, optional: true, calculated: true }
   const regel = rel('r', ['ordernr', 'regelnr'], 300, 0)
   const lev = rel('l', ['ordernr', 'regelnr', 'datum'], 300, 200)
   return {
@@ -56,7 +56,7 @@ describe('export scene', () => {
     const pk = t.find((o) => o.text === 'klantnr' && o.font === fontFor('bold'))!
     const underline = scene.ops.find((o) => o.kind === 'line')!
     expect(underline).toMatchObject({ x1: pk.x, x2: pk.x + m.width('klantnr', 'bold'), y1: pk.y + 3 })
-    // Calculated + nullable: "/" first, then the name, then a raised, smaller "o".
+    // Calculated + optional: "/" first, then the name, then a raised, smaller "o".
     const name = t.find((o) => o.text === 'totaal')!
     const slash = t.find((o) => o.text === '/')!
     const o = t.find((x) => x.text === 'o')!
@@ -245,10 +245,10 @@ describe('copy data', () => {
 
   it('writes / before and ° after the name, wraps keys whole in asterisks (duplicate suffix inside), never marks references', () => {
     const t = rel('t', ['a', 'b', 'c', 'd', 'a'])
-    const set = (i: number, f: Partial<Record<'primaryKey' | 'nullable' | 'calculated', boolean>>) =>
+    const set = (i: number, f: Partial<Record<'primaryKey' | 'optional' | 'calculated', boolean>>) =>
       (t.attributes[i] = { ...t.attributes[i]!, ...f })
-    set(0, { primaryKey: true, nullable: true, calculated: true })
-    set(1, { nullable: true })
+    set(0, { primaryKey: true, optional: true, calculated: true })
+    set(1, { optional: true })
     set(2, { calculated: true })
     set(4, { primaryKey: true })
     t.attributes[4] = { ...t.attributes[4]!, id: 't.a#2' }

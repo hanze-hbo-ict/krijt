@@ -10,11 +10,11 @@ const alert = (page: Page) => page.getByRole('alertdialog')
 /** Closes the error dialog with its OK button. */
 const dismiss = (page: Page) => alert(page).getByRole('button', { name: 'OK' }).click()
 
-const attr = (id: string, name: string, flags: Partial<Record<'primaryKey' | 'nullable' | 'calculated', boolean>> = {}) => ({
+const attr = (id: string, name: string, flags: Partial<Record<'primaryKey' | 'optional' | 'calculated', boolean>> = {}) => ({
   id,
   name,
   primaryKey: false,
-  nullable: false,
+  optional: false,
   calculated: false,
   ...flags,
 })
@@ -30,7 +30,7 @@ const SAMPLE = {
       id: 'o',
       name: null,
       position: { x: 0, y: 160 },
-      attributes: [attr('o1', 'ordernr', { primaryKey: true }), attr('o2', 'klantnr'), attr('o3', 'totaal', { calculated: true, nullable: true })],
+      attributes: [attr('o1', 'ordernr', { primaryKey: true }), attr('o2', 'klantnr'), attr('o3', 'totaal', { calculated: true, optional: true })],
     },
     { id: 'r', name: 'Regel', position: { x: 360, y: 0 }, attributes: [attr('r1', 'ordernr', { primaryKey: true }), attr('r2', 'regelnr', { primaryKey: true })] },
     { id: 'l', name: null, position: { x: 360, y: 160 }, attributes: [attr('l1', 'ordernr'), attr('l2', 'regelnr'), attr('l3', 'datum')] },
@@ -57,7 +57,7 @@ async function openWithRaw(page: Page, raw: string) {
   await page.goto('/')
 }
 const openWith = (page: Page, doc: unknown) =>
-  openWithRaw(page, JSON.stringify({ version: 1, doc, ui: { viewport: { x: 40, y: 60, zoom: 1 }, sidebarWidth: 280 } }))
+  openWithRaw(page, JSON.stringify({ version: 1, doc, ui: { viewport: { x: 40, y: 60, zoom: 1 }, sidebarCollapsed: false } }))
 
 test.beforeEach(async ({ page }) => {
   page.on('request', (req) => {

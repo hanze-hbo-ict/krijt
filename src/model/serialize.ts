@@ -21,8 +21,8 @@
  * - One block per table, in diagram order, separated by an empty line. The first line is the table's name; a
  *   repeated name gets a suffix by occurrence (the second "Klant" is "Klant#2"); unnamed tables are "#1", "#2", ….
  * - Then the columns, indented two spaces, in diagram order. A repeated column name gets the same suffix ("x#2").
- * - Calculated is a `/` in front and nullable a `°` after, as in the diagram ("/totaal°"). A primary key is wrapped
- *   in asterisks around the whole column as written ("*klantnr*"; a calculated, nullable key is "/totaal°" between
+ * - Calculated is a `/` in front and optional a `°` after, as in the diagram ("/totaal°"). A primary key is wrapped
+ *   in asterisks around the whole column as written ("*klantnr*"; a calculated, optional key is "/totaal°" between
  *   asterisks), so an asterisk never follows the slash (that would read as the start of an SQL comment). A duplicate suffix belongs to the name, inside the asterisks ("*x#2*").
  * - Table names are in capitals, as in the diagram ("KLANT"); names that differ only in case count as repeated.
  * - Names contain only letters, digits, dashes and underscores (see names.ts), so none of the notation can be part
@@ -47,9 +47,9 @@ export type ExportTable = {
   references: string[]
 }
 
-/** A column as written: `/` calculated, the name, `°` nullable; a primary key wraps all of it in asterisks. */
+/** A column as written: `/` calculated, the name, `°` optional; a primary key wraps all of it in asterisks. */
 export function notated(a: Attribute, name: string): string {
-  const written = (a.calculated ? '/' : '') + name + (a.nullable ? '°' : '')
+  const written = (a.calculated ? '/' : '') + name + (a.optional ? '°' : '')
   return a.primaryKey ? `*${written}*` : written
 }
 

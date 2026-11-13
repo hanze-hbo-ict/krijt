@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addSourceFields, parseFieldList } from '../../src/commands/builders'
 import { initialState, reducer, type Action, type AppState } from '../../src/state/appState'
-import { NO_FIELDS_MESSAGE, newTablePosition, resolveCanvasClick, type CanvasTarget } from '../../src/state/interaction'
+import { newTablePosition, resolveCanvasClick, type CanvasTarget } from '../../src/state/interaction'
 
 function run(state: AppState, ...actions: (Action | null)[]): AppState {
   return actions.reduce<AppState>((s, a) => {
@@ -80,13 +80,10 @@ describe('place operation', () => {
     expect(s.doc.relations[0]!.attributes.map((x) => x.name)).toEqual(['a', 'b', 'c'])
   })
 
-  it('without selected fields, explains instead of creating anything', () => {
+  it('without selected fields, nothing happens', () => {
     let s = withFields(['a'])
     s = run(s, { type: 'startPlace' })
-    s = click(s, EMPTY)
-    expect(s.doc.relations).toHaveLength(0)
-    expect(s.ui.operation.kind).toBe('place')
-    expect(s.ui.message?.text).toBe(NO_FIELDS_MESSAGE)
+    expect(resolveCanvasClick(s, EMPTY, { x: 0, y: 0 })).toBeNull()
   })
 
   it('cancel leaves the document unchanged and keeps the field selection', () => {

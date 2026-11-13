@@ -17,7 +17,7 @@ export type Attribute = {
   /** The name as typed. Notation (underline, `/`, superscript o) is never stored in it. */
   name: string
   primaryKey: boolean
-  nullable: boolean
+  optional: boolean
   calculated: boolean
 }
 
@@ -53,5 +53,5 @@ export function emptyDocument(): KrijtDocument {
 }
 
 export function newAttribute(id: Id, name: string): Attribute {
-  return { id, name, primaryKey: false, nullable: false, calculated: false }
+  return { id, name, primaryKey: false, optional: false, calculated: false }
 }

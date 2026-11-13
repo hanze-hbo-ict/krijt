@@ -91,7 +91,7 @@ describe('placing fields into tables', () => {
     expect(r.name).toBeNull()
     expect(r.position).toEqual({ x: 10, y: 21 })
     expect(r.attributes.map((a) => a.name)).toEqual(['Klantnr', 'Naam'])
-    expect(r.attributes.every((a) => !a.primaryKey && !a.nullable && !a.calculated)).toBe(true)
+    expect(r.attributes.every((a) => !a.primaryKey && !a.optional && !a.calculated)).toBe(true)
     // Attributes do not share IDs with the source fields they came from.
     const fieldIds = new Set(doc.sourceFields.map((f) => f.id))
     expect(r.attributes.some((a) => fieldIds.has(a.id))).toBe(false)

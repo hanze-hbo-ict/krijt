@@ -5,6 +5,7 @@
  * point at existing attributes with matching group sizes. It never applies
  * normalization rules.
  */
+import { isValidName } from './names'
 import type { Attribute, KrijtDocument, Reference, ReferenceEnd, Relation, SourceField } from './types'
 
 export const MAX_TEXT_LENGTH = 500
@@ -19,15 +20,15 @@ const isText = (v: unknown): v is string => typeof v === 'string' && v.length <=
 const isCoord = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= MAX_COORD
 
 function parseSourceField(v: unknown): SourceField | null {
-  if (!isObj(v) || !isId(v.id) || !isText(v.label)) return null
+  if (!isObj(v) || !isId(v.id) || !isText(v.label) || !isValidName(v.label)) return null
   if (v.ticked !== undefined && typeof v.ticked !== 'boolean') return null
   return v.ticked ? { id: v.id, label: v.label, ticked: true } : { id: v.id, label: v.label }
 }
 
 function parseAttribute(v: unknown): Attribute | null {
   if (!isObj(v) || !isId(v.id) || !isText(v.name)) return null
-  if (typeof v.primaryKey !== 'boolean' || typeof v.nullable !== 'boolean' || typeof v.calculated !== 'boolean') return null
-  return { id: v.id, name: v.name, primaryKey: v.primaryKey, nullable: v.nullable, calculated: v.calculated }
+  if (typeof v.primaryKey !== 'boolean' || typeof v.optional !== 'boolean' || typeof v.calculated !== 'boolean') return null
+  return { id: v.id, name: v.name, primaryKey: v.primaryKey, optional: v.optional, calculated: v.calculated }
 }
 
 function parseRelation(v: unknown): Relation | null {

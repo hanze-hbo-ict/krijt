@@ -103,7 +103,7 @@ test('acceptance: split a 10-attribute table into three, copy one back, undo and
   expect(await tables(page)).toEqual(states[2])
 })
 
-test('notation: primary key bold and underlined, nullable superscript o, calculated slash', async ({ page }) => {
+test('notation: primary key bold and underlined, optional superscript o, calculated slash', async ({ page }) => {
   await setup(page, ['Ordernr', 'Regelnr', 'Korting', 'Subtotaal'])
   const rel = relations(page).nth(0)
 
@@ -114,10 +114,10 @@ test('notation: primary key bold and underlined, nullable superscript o, calcula
 
   await clickEmpty(page)
   await cellIn(rel, 'Korting').click()
-  await page.getByRole('button', { name: 'Nullable' }).click()
+  await page.getByRole('button', { name: 'Optional' }).click()
   await cellIn(rel, 'Subtotaal').click()
   await page.getByRole('button', { name: 'Calculated' }).click()
-  await page.getByRole('button', { name: 'Nullable' }).click()
+  await page.getByRole('button', { name: 'Optional' }).click()
 
   for (const n of ['Ordernr', 'Regelnr']) {
     await expect(cellIn(rel, n).locator('text')).toHaveAttribute('font-weight', '700')
@@ -129,7 +129,7 @@ test('notation: primary key bold and underlined, nullable superscript o, calcula
   const korting = cellIn(rel, 'Korting').locator('tspan')
   await expect(korting).toHaveText(['Korting', 'o'])
   await expect(korting.nth(1)).toHaveAttribute('dy', '-6')
-  // Calculated + nullable: /, then the name, then superscript o.
+  // Calculated + optional: /, then the name, then superscript o.
   await expect(cellIn(rel, 'Subtotaal').locator('tspan')).toHaveText(['/', 'Subtotaal', 'o'])
 
   // Mixed selection shows a mixed state; the toggle then sets the flag on all. Shift-click adds too.

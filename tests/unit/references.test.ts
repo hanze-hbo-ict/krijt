@@ -6,8 +6,8 @@ import { contentBounds, estimateMeasurer as m, layoutRelation, type RelationLayo
 import { bracePath, layoutReferences, REFERENCE_METRICS } from '../../src/geometry/references'
 import { emptyDocument, newAttribute, type Id, type KrijtDocument, type Reference, type Relation } from '../../src/model/types'
 import { parseDocument } from '../../src/model/validate'
-import { initialState, reducer, SOURCE_ONE_TABLE_MESSAGE, TARGET_IS_SOURCE_MESSAGE, type Action, type AppState } from '../../src/state/appState'
-import { nextStepAction, referenceReady, resolveCanvasClick, type CanvasTarget } from '../../src/state/interaction'
+import { initialState, NO_ATTRIBUTES_MESSAGE, reducer, type Action, type AppState } from '../../src/state/appState'
+import { referenceBlock, resolveCanvasClick, type CanvasTarget } from '../../src/state/interaction'
 
 const rel = (id: string, names: string[], x = 0, y = 0, name: string | null = null): Relation => ({
   id,
@@ -226,7 +226,14 @@ const cell = (s: AppState, table: number, name: string): CanvasTarget => {
   const a = r.attributes.find((x) => x.name === name)!
   return { kind: 'attribute', relationId: r.id, attributeId: a.id }
 }
-const finish = (s: AppState) => run(s, nextStepAction(s))
+/** Selects the foreign-key cells (one table) by clicks, then "Reference". */
+function referenceFrom(s: AppState, table: number, ...names: string[]): AppState {
+  s = click(s, { kind: 'empty' })
+  s = click(s, cell(s, table, names[0]!))
+  if (names.length > 1) s = run(s, { type: 'ui', patch: { multiSelect: true } })
+  for (const n of names.slice(1)) s = click(s, cell(s, table, n))
+  return run(s, { type: 'startReference' })
+}
 const message = (s: AppState) => s.ui.message?.text ?? null
 
 /** Two tables built through the UI: Klant(klantnr, naam) at the top, Bestelling(ordernr, datum, klantnr) below. */
@@ -237,17 +244,10 @@ function twoTables(): AppState {
 }
 
 describe('Reference mode', () => {
-  it('creates a simple reference with clicks: foreign key, Next, referenced, Finish', () => {
-    let s = twoTables()
-    s = run(s, { type: 'startReference' })
-    expect(s.ui.operation).toMatchObject({ kind: 'reference', phase: 'source' })
-    s = click(s, cell(s, 1, 'klantnr'))
-    s = run(s, { type: 'next' })
-    expect(s.ui.operation).toMatchObject({ phase: 'target' })
-    expect(referenceReady(s)).toBe(false)
+  it('creates a simple reference with clicks: select the foreign key, Reference, click the referenced cell', () => {
+    let s = referenceFrom(twoTables(), 1, 'klantnr')
+    expect(s.ui.operation).toEqual({ kind: 'reference', source: ['b.klantnr'] })
     s = click(s, cell(s, 0, 'klantnr'))
-    expect(referenceReady(s)).toBe(true)
-    s = finish(s)
     expect(s.doc.references).toHaveLength(1)
     expect(s.doc.references[0]).toMatchObject({ from: { relationId: 'b', attributeIds: ['b.klantnr'] }, to: { relationId: 'k', attributeIds: ['k.klantnr'] } })
     expect(s.ui.operation.kind).toBe('select')
@@ -258,56 +258,34 @@ describe('Reference mode', () => {
     expect(s.ui.selection.kind).toBe('none')
   })
 
-  it('starts from the selection with "Reference from…", straight to step 2', () => {
-    let s = twoTables()
-    s = click(s, cell(s, 1, 'klantnr'))
-    s = run(s, { type: 'startReference', fromSelection: true })
-    expect(s.ui.operation).toEqual({ kind: 'reference', phase: 'target', source: ['b.klantnr'], target: [] })
-    s = finish(click(s, cell(s, 0, 'klantnr')))
-    expect(s.doc.references).toHaveLength(1)
-  })
+  it('one click picks a composite end: that many side-by-side cells from the clicked one, shifted to fit', () => {
+    const doc = docWith([rel('r', ['a', 'ordernr', 'regelnr', 'b'], 0, 0), rel('l', ['levnr', 'ordernr', 'regelnr'], 0, 250)])
+    const source = ['l.regelnr', 'l.ordernr']
+    expect(referenceBlock(doc, source, 'r.ordernr')).toEqual(['r.ordernr', 'r.regelnr'])
+    expect(referenceBlock(doc, source, 'r.b')).toEqual(['r.regelnr', 'r.b']) // the last cell: shifted left to fit
+    expect(referenceBlock(docWith([rel('r', ['x'])]), source, 'r.x')).toBeNull() // too short
 
-  it('the tool starts empty even with a selection', () => {
-    let s = twoTables()
-    s = click(s, cell(s, 1, 'klantnr'))
-    s = run(s, { type: 'startReference' })
-    expect(s.ui.operation).toEqual({ kind: 'reference', phase: 'source', source: [], target: [] })
-  })
-
-  it('pairs a composite reference left to right, whatever the click order', () => {
-    let s = initialState(docWith([rel('r', ['ordernr', 'regelnr'], 0, 0), rel('l', ['levnr', 'ordernr', 'regelnr'], 0, 250)]))
-    s = run(s, { type: 'startReference' })
-    s = click(s, cell(s, 1, 'regelnr'))
-    s = click(s, cell(s, 1, 'ordernr'))
-    s = run(s, { type: 'next' })
+    let s = referenceFrom(initialState(doc), 1, 'regelnr', 'ordernr') // click order does not matter
     s = click(s, cell(s, 0, 'ordernr'))
-    s = click(s, cell(s, 0, 'regelnr'))
-    s = finish(s)
     expect(s.doc.references[0]!.from.attributeIds).toEqual(['l.ordernr', 'l.regelnr'])
     expect(s.doc.references[0]!.to.attributeIds).toEqual(['r.ordernr', 'r.regelnr'])
   })
 
-  it('refuses ends whose attributes are not side by side, at Next and at Finish', () => {
-    let s = initialState(docWith([rel('r', ['ordernr', 'x', 'regelnr'], 0, 0), rel('l', ['ordernr', 'levnr', 'regelnr'], 0, 250)]))
-    s = run(s, { type: 'startReference' })
-    s = click(click(s, cell(s, 1, 'ordernr')), cell(s, 1, 'regelnr'))
-    expect(message(run(s, { type: 'next' }))).toMatch(/next to each other/)
-    expect(run(s, { type: 'next' }).ui.operation).toMatchObject({ phase: 'source' })
-    s = click(s, cell(s, 1, 'regelnr'))
-    s = click(s, cell(s, 1, 'levnr'))
-    s = run(s, { type: 'next' })
-    s = click(click(s, cell(s, 0, 'ordernr')), cell(s, 0, 'regelnr'))
-    const after = finish(s)
-    expect(after.doc.references).toEqual([])
-    expect(message(after)).toMatch(/next to each other/)
+  it('a table with too few attributes explains and keeps the operation', () => {
+    let s = initialState(docWith([rel('r', ['ordernr'], 0, 0), rel('l', ['ordernr', 'regelnr'], 0, 250)]))
+    s = referenceFrom(s, 1, 'ordernr', 'regelnr')
+    s = click(s, cell(s, 0, 'ordernr'))
+    expect(s.doc.references).toEqual([])
+    expect(message(s)).toBe('This table has only 1 attribute; the foreign key has 2.')
+    expect(s.ui.operation.kind).toBe('reference')
   })
 
-  it('"Reference from…" with attributes that are not side by side stays at step 1 and explains', () => {
-    let s = initialState(docWith([rel('l', ['ordernr', 'levnr', 'regelnr'], 0, 250)]), { multiSelect: true })
-    s = click(click(s, cell(s, 0, 'ordernr')), cell(s, 0, 'regelnr'))
-    s = run(s, { type: 'startReference', fromSelection: true })
-    expect(s.ui.operation).toMatchObject({ phase: 'source', source: ['l.ordernr', 'l.regelnr'] })
+  it('"Reference" needs a side-by-side selection, and explains otherwise', () => {
+    let s = initialState(docWith([rel('l', ['ordernr', 'levnr', 'regelnr'], 0, 250)]))
+    s = referenceFrom(s, 0, 'ordernr', 'regelnr')
+    expect(s.ui.operation.kind).toBe('select')
     expect(message(s)).toMatch(/next to each other/)
+    expect(message(run(twoTables(), { type: 'startReference' }))).toBe(NO_ATTRIBUTES_MESSAGE)
   })
 })
 
@@ -389,58 +367,28 @@ describe('reference ends as units', () => {
     expect(geometryOf(s.doc)[0]!.dots).toEqual([])
   })
 
-  it('explains impossible selections without changing anything', () => {
-    let s = twoTables()
-    s = run(s, { type: 'startReference' })
-    expect(message(run(s, { type: 'next' }))).toMatch(/foreign-key attributes first/)
-    s = click(s, cell(s, 1, 'klantnr'))
-    // A second table for the foreign key.
-    const other = click(s, cell(s, 0, 'naam'))
-    expect(message(other)).toBe(SOURCE_ONE_TABLE_MESSAGE)
-    expect(other.ui.operation).toEqual(s.ui.operation)
-    s = run(s, { type: 'next' })
+  it('explains impossible references without changing anything', () => {
+    let s = referenceFrom(twoTables(), 1, 'klantnr')
     // A foreign-key attribute as its own target.
-    expect(message(click(s, cell(s, 1, 'klantnr')))).toBe(TARGET_IS_SOURCE_MESSAGE)
-    // More targets than foreign-key attributes.
-    s = click(s, cell(s, 0, 'klantnr'))
-    expect(message(click(s, cell(s, 0, 'naam')))).toMatch(/matched/)
-  })
-
-  it('does not finish with too few referenced attributes', () => {
-    let s = initialState(docWith([rel('r', ['ordernr', 'regelnr'], 0, 0), rel('l', ['ordernr', 'regelnr'], 0, 250)]))
-    s = run(s, { type: 'startReference' })
-    s = click(click(s, cell(s, 1, 'ordernr')), cell(s, 1, 'regelnr'))
-    s = run(s, { type: 'next' })
-    s = click(s, cell(s, 0, 'ordernr'))
-    expect(referenceReady(s)).toBe(false)
-    const after = finish(s)
-    expect(after.doc).toBe(s.doc)
-    expect(message(after)).toMatch(/Select 2 referenced attributes \(1 selected\)/)
-  })
-
-  it('clicking a chosen cell again removes it; Back returns to the foreign key', () => {
-    let s = twoTables()
-    s = run(s, { type: 'startReference' })
-    s = click(s, cell(s, 1, 'klantnr'))
-    s = click(s, cell(s, 1, 'klantnr'))
-    expect(s.ui.operation).toMatchObject({ source: [] })
-    s = click(s, cell(s, 1, 'datum'))
-    s = run(s, { type: 'next' })
-    s = click(s, cell(s, 0, 'klantnr'))
-    s = run(s, { type: 'back' })
-    expect(s.ui.operation).toEqual({ kind: 'reference', phase: 'source', source: ['b.datum'], target: [] })
+    const self = click(s, cell(s, 1, 'klantnr'))
+    expect(message(self)).toMatch(/cannot refer to itself/)
+    expect(self.doc).toBe(s.doc)
+    // A block that is not side by side cannot happen; a block overlapping the foreign key in the same table explains too.
+    s = referenceFrom(twoTables(), 1, 'datum', 'klantnr')
+    expect(message(click(s, cell(s, 1, 'ordernr')))).toMatch(/cannot refer to itself/)
   })
 
   it('Escape cancels without touching the document; stray clicks do nothing', () => {
     let s = twoTables()
     const doc = s.doc
-    s = run(s, { type: 'startReference' })
+    s = referenceFrom(s, 1, 'klantnr')
+    const op = s.ui.operation
     s = click(s, { kind: 'empty' })
     s = click(s, { kind: 'relation', relationId: 'k' })
-    expect(s.ui.operation).toMatchObject({ source: [] })
-    s = click(s, cell(s, 1, 'klantnr'))
-    s = run(s, { type: 'next' }, { type: 'cancel' })
+    expect(s.ui.operation).toBe(op)
+    s = run(s, { type: 'cancel' })
     expect(s.ui.operation.kind).toBe('select')
+    expect(s.ui.selection).toEqual({ kind: 'attributes', attributeIds: ['b.klantnr'] })
     expect(s.doc).toBe(doc)
     expect(s.history.past).toHaveLength(1) // only the setup command
   })
@@ -481,14 +429,11 @@ describe('Milestone 3 acceptance (state level)', () => {
       ]),
     )
     // Simple: Order.klantnr → Klant.klantnr.
-    s = run(s, { type: 'startReference' })
-    s = run(click(s, cell(s, 0, 'klantnr')), { type: 'next' })
-    s = finish(click(s, cell(s, 1, 'klantnr')))
+    s = referenceFrom(s, 0, 'klantnr')
+    s = click(s, cell(s, 1, 'klantnr'))
     // Composite: Levering(ordernr, regelnr) → Regel(ordernr, regelnr).
-    s = run(s, { type: 'startReference' })
-    s = click(click(s, cell(s, 3, 'ordernr')), cell(s, 3, 'regelnr'))
-    s = run(s, { type: 'next' })
-    s = finish(click(click(s, cell(s, 2, 'ordernr')), cell(s, 2, 'regelnr')))
+    s = referenceFrom(s, 3, 'ordernr', 'regelnr')
+    s = click(s, cell(s, 2, 'ordernr'))
     expect(s.doc.references).toHaveLength(2)
     const refs = s.doc.references
 
@@ -497,9 +442,8 @@ describe('Milestone 3 acceptance (state level)', () => {
     s = run(s, { type: 'command', command: { type: 'moveRelation', relationId: 'r', position: { x: 300, y: 600 } } })
     s = run(s, { type: 'command', command: { type: 'shiftAttributes', attributeIds: ['o.klantnr'], delta: -1 } })
     s = run(s, { type: 'command', command: { type: 'shiftAttributes', attributeIds: ['l.levnr'], delta: 1 } })
+    s = click(click(s, { kind: 'empty' }), cell(s, 3, 'ordernr'))
     s = run(s, { type: 'startAttributes', kind: 'move' })
-    s = click(click(s, cell(s, 3, 'ordernr')), cell(s, 3, 'regelnr'))
-    s = run(s, { type: 'next' })
     s = click(s, { kind: 'empty' }, { x: 700, y: 700 })
     expect(s.doc.relations).toHaveLength(5)
 

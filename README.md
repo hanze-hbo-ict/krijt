@@ -53,35 +53,38 @@ operation needs a modifier key.
 
 **Attributes**
 
-- **Tools** (column at the left of the canvas): **Select** (one cell per click; clicking it again deselects),
-  **Select several** (each click adds or removes a cell, across tables), **Move**, **Copy**.
-- The bar above the canvas acts on the selection: **Rename** (also double-click or Enter), **Primary key**,
-  **Nullable**, **Calculated** (each toggles only its own flag; a mixed selection shows a mixed state), **Move left /
-  right** (also ← →), **Move to…**, **Copy to…**, **Delete** (also Del/Backspace).
+- A click selects one cell (clicking it again deselects). **Add to selection** (or Shift-click) makes each click add or
+  remove a cell; a selection always lies within one table, so a cell in another table starts a new selection. The
+  mode ends when the selection becomes empty.
+- The **context toolbar** floats next to the selection (above a table or the selected cells; beside a selected
+  reference's line), icon-only with tooltips: **Add to selection**, **Rename** (also double-click or Enter), **Primary
+  key**, **Nullable**, **Calculated** (shown in the diagram's notation; each toggles only its own flag; a mixed
+  selection shows a mixed state), **Move left / right** (also ← →), **Move**, **Copy**, **Reference**,
+  **Delete** (also Del/Backspace).
 - **Notation**: primary key **bold and underlined** (several per table for a composite key), nullable with a real
   superscript `o`, calculated with a `/` suffix, both as `name/ᵒ`. Notation is rendered from flags, never stored in names.
-- **Move / Copy** are one-shot, two-step operations. From the tool strip: click attributes (count shown), **Next**
-  (Enter), then click a destination. From **Move to… / Copy to…**: straight to the destination for the current
-  selection. Destinations: a table header (append), a cell's left/right half (insert), or empty canvas (new unnamed
-  table). Hovering shows a preview: an insertion bar, or the outline of the new table. Afterwards the moved attributes
-  (or the new copies) are selected and the tool returns to Select. Escape/Cancel at any step changes nothing.
+- **Move / Copy** act on the selection: the button stays pressed, and the next click on the canvas is the
+  destination: a table header (append), a cell's left/right half (insert), or empty canvas (new unnamed table).
+  Hovering (or keyboard focus) shows a preview: an insertion bar, or the outline of the new table. Afterwards the moved
+  attributes (or the new copies) are selected. Pressing the button again, or Escape, changes nothing.
 - Move keeps attribute IDs, so references stay attached; copies get new IDs and no references. A table left empty is
   removed. Dragging a cell (or a selection) moves it, through the same command.
 - Typed attributes: the dashed **+** cell after a strip, or **Add attribute**.
 
 **References**
 
-- **Reference** tool (or **Reference from…** for the selected attributes): click the foreign-key attribute(s), all in
-  one table and side by side, **Next** (Enter), then click the referenced attribute(s), side by side in one table and
-  as many, **Finish** (Enter). The ends pair up **left to right in table order** (click order does not matter, and the
-  ends are stored in table order); composite ends show numbered badges. **Back** returns to step 1; Escape/Cancel
-  changes nothing. Impossible picks (a second table, ends not side by side, too many targets, a foreign-key attribute
-  as its own target) are refused with a message. Nothing checks keys or names: a target need not be a primary key.
+- **Reference**: select the foreign-key attribute(s), side by side, then click the referenced attribute. For a
+  composite key of N attributes, one click picks N side-by-side cells, starting at the clicked one and shifted left
+  where needed to fit the table; hovering previews the block with its pairing numbers and the connector. The ends pair
+  up **left to right in table order** (selection order does not matter, and the ends are stored in table order);
+  composite ends show numbered badges. Pressing the button again, or Escape, changes nothing. Impossible picks (a
+  foreign key not side by side, a table with too few attributes, a foreign-key attribute as its own target) are
+  refused with a message. Nothing checks keys or names: a target need not be a primary key.
 - **Ends are units.** ← → on a whole composite end shift it as one block, and other attributes jump over it. ← → on
   part of an end reorder inside it (which changes the left-to-right pairing, as the diagram shows); once the part
   reaches the end's edge, the next press moves the whole block. A reorder that would separate overlapping ends moves
   the block instead.
-  Moving one member (Move, Move to…, or a drag) brings the rest of the end along, with a message, and selects it all.
+  Moving one member (Move or a drag) brings the rest of the end along, with a message, and selects it all.
   Placing, copying or moving to a point inside an end snaps to the block's nearer edge (after it on a tie); the
   preview shows the snapped spot. Overlapping ends in one table form one block.
 - **Rendering**: one attribute per end gives a plain orthogonal arrow from the foreign key to the referenced cell; a
@@ -101,7 +104,7 @@ stay free text; placing a field converts its label (each run of other characters
 underscores become one and outer ones are dropped; typed dashes stay: `Datum (dd-mm)` → `Datum_dd-mm`). Names from sessions made before this rule still load.
 
 **Tables**: click the header band to select; **Name table / Rename table** (empty = unnamed), **Add attribute**, **Move
-table** (then click), **Select all attributes**, **Delete table**. Tables also move by dragging the header band or with
+table** and **Copy table** (then click where it goes; the copy has no name and no references), **Delete table**. Tables also move by dragging the header band or with
 the arrow keys.
 
 **Undo / redo**: buttons in the header, Ctrl/⌘+Z and Ctrl/⌘+Shift+Z (or Ctrl+Y). Every document change is one step,
@@ -119,13 +122,13 @@ diagram and says so.
 
 **Handing in** (header, always visible):
 
-- **Copy image** puts a PNG of the diagram on the clipboard: tables, notation, table names, connectors and braces in
+- **Copy as image** puts a PNG of the diagram on the clipboard: tables, notation, table names, connectors and braces in
   dark ink on opaque white, cropped to the content plus a 24-unit margin, at 2× (smaller only for very large
   diagrams, within browser canvas limits). No grid, header bands, grips, + cells, selection or end marks. Success is
   shown only after the browser confirms the write; a blocked, unsupported or insecure clipboard, or a failed render,
   gives a specific message and nothing claims success. There is no download fallback. Disabled while there are no
   tables.
-- **Copy data** puts the diagram on the clipboard as plain text, meant to be understood by reading it:
+- **Copy as text** puts the diagram on the clipboard as plain text, meant to be understood by reading it:
 
   ```text
   Klant
@@ -158,21 +161,21 @@ diagram and says so.
   there are no tables. Because names can only contain letters, digits, dashes and underscores (below), none of the
   notation can be part of a name, so the text is unambiguous. If the answer field renders Markdown, `*klantnr*`
   would show as italics without the asterisks; check this in the release gate.
-- **New** asks for confirmation, then clears the diagram (optionally keeping the form fields). It is one undo step;
+- **Clear diagram** asks for confirmation, then clears the diagram (optionally keeping the form fields). It is one undo step;
   the recovery copy follows the cleared state.
 
 ### Demo scenario (Milestone 4 acceptance)
 
 1. Build a normalization answer with clicks only (Milestones 1–3): tables, keys, nullable/calculated marks, one simple
    and one composite reference.
-2. **Copy image**, paste into the answer field (or any image-accepting editor) and check that all notation is legible:
+2. **Copy as image**, paste into the answer field (or any image-accepting editor) and check that all notation is legible:
    bold underlined keys, superscript `o`, `/`, braces at both ends, arrowheads.
 3. Reload the tab: the diagram is restored.
 
 Automated in `tests/unit/export.test.ts` (scene, scale limits, clipboard results with fake browser objects, the text export,
-New, recovery status) and `tests/e2e/milestone4.spec.ts`: in Chromium a real clipboard round trip (the PNG is read
+Clear diagram, recovery status) and `tests/e2e/milestone4.spec.ts`: in Chromium a real clipboard round trip (the PNG is read
 back and checked for size, opaque white corners, ink and the absence of selection colours; the text is read back and
-compared), and in every browser a blocked and an unsupported clipboard, New diagram, corrupt recovery data, a change
+compared), and in every browser a blocked and an unsupported clipboard, Clear diagram, corrupt recovery data, a change
 right before reload, and a 25-field / 10-table / 12-reference diagram whose interactions each stay under one second.
 
 ### Release gate (manual)
@@ -180,9 +183,9 @@ right before reload, and a 25-field / 10-table / 12-reference diagram whose inte
 Clipboard behaviour in a locked-down exam browser cannot be tested from here. Before relying on Krijt in an exam:
 
 1. Open the deployed (https) Krijt in the actual exam/lockdown browser and the actual answer type.
-2. Build a small diagram with every notation, **Copy image**, paste into the answer field, submit a test answer and view
+2. Build a small diagram with every notation, **Copy as image**, paste into the answer field, submit a test answer and view
    it as a grader. Check legibility at the size the grader sees.
-3. Repeat with **Copy data** if text answers are allowed.
+3. Repeat with **Copy as text** if text answers are allowed.
 4. If the clipboard is blocked, Krijt says so; report the limitation. Do not add a download or upload path without a
    deliberate change to the requirements.
 
@@ -190,9 +193,9 @@ Clipboard behaviour in a locked-down exam browser cannot be tested from here. Be
 
 1. Paste `ordernr, klantnr, naam, regelnr, aantal, levnr` (one per line) and place four tables: Order
    (`ordernr, klantnr`), Klant (`klantnr, naam`), Regel (`ordernr, regelnr, aantal`), Levering (`ordernr, regelnr, levnr`).
-2. **Reference**, click Order's `klantnr`, **Next**, click Klant's `klantnr`, **Finish**: one arrow.
-3. **Select several**, click Levering's `ordernr` and `regelnr`, **Reference from…**, click Regel's `ordernr` and
-   `regelnr`, Enter: braces at both ends, one arrow.
+2. Click Order's `klantnr`, **Reference**, click Klant's `klantnr`: one arrow.
+3. Click Levering's `ordernr`, **Add to selection**, click its `regelnr`, **Reference**, click Regel's
+   `ordernr`: braces at both ends, one arrow.
 4. Move Klant and Regel (**Move table** + click), reorder attributes with ← →, undo: both references stay attached at
    every step, and survive a reload.
 
@@ -203,10 +206,11 @@ which cells each connector end touches.
 
 1. Paste ten fields (`Ordernr, Datum, Klantnr, Naam, Adres, Plaats, Artikelnr, Omschrijving, Aantal, Prijs`, one per
    line), select them all, **Place in diagram**, click empty canvas.
-2. **Move** tool, click `Klantnr`, `Naam`, `Adres`, `Plaats`, **Next**, click empty canvas below: a second table.
-3. Click empty canvas, **Select several**, click `Artikelnr`, `Omschrijving`, `Prijs`, **Move to…**, click empty canvas:
+2. Click `Klantnr`, **Add to selection**, click `Naam`, `Adres`, `Plaats`, **Move**, click empty canvas below: a
+   second table.
+3. Click empty canvas, select `Artikelnr`, `Omschrijving`, `Prijs` the same way, **Move**, click empty canvas:
    three tables.
-4. **Copy** tool, click `Klantnr`, **Next**, click the first table's header: `Klantnr` is copied back.
+4. Click `Klantnr`, **Copy**, click the first table's header: `Klantnr` is copied back.
 5. Undo four times and redo four times; each step restores exactly the previous diagram.
 
 This runs as automated tests in `tests/unit/operations.test.ts` and `tests/e2e/milestone2.spec.ts` (clicks only).
@@ -221,12 +225,13 @@ src/
   state/        appState.ts (reducer, UI state machine, history), interaction.ts (click/drop → action, destinations)
   geometry/     layout.ts (strip layout, notation widths, bounds), references.ts (connectors, braces), measure.ts, viewport.ts
   canvas/       Canvas.tsx (SVG, hit testing, previews, pan/zoom, drags, inline editors), RelationView.tsx (one strip),
-                ReferenceView.tsx (one connector)
+                ReferenceView.tsx (one connector), SelectionToolbar.tsx (context toolbar next to the selection)
   inventory/    Sidebar.tsx (form fields, field drag source)
   clipboard/    scene.ts (export picture as drawing operations), paint.ts (canvas + PNG), clipboard.ts (writes, errors)
   persistence/  session.ts (versioned sessionStorage)
   components/   Icon, Splitter, InlineInput
-  app/          App.tsx (shell, shortcuts), ContextBar.tsx (tools, context bar, messages), HelpDialog.tsx
+  app/          App.tsx (shell, shortcuts), DiagramHeader.tsx (undo/redo, zoom, copy, new), MessageBanner.tsx,
+                HelpDialog.tsx
 tests/
   unit/         commands, attributes, geometry, state machine, operations + history, references, export, session recovery
   e2e/          Playwright workflows (app.spec.ts: M1, milestone2.spec.ts … milestone4.spec.ts: M2–M4)
@@ -248,10 +253,11 @@ drops. `destinationFor(doc, target, point)` turns a hit target into a destinatio
 hit. The preview renders from the same function, so what you see is where things go.
 
 **State and history.** One `useReducer` holds `{ doc, ui, history }`. `ui.operation` is the state machine: `select`,
-`place`, `moveTable`, `move.{selecting,destination}`, `copy.{selecting,destination}`, and
-`reference.{source,target}`, which carries both ordered attribute lists itself. Finishing a reference needs a fresh ID,
-so `nextStepAction(state)` resolves Next/Finish/Enter for every operation outside the reducer. One-shot operations return to
-`select`; Cancel/Escape changes UI state only. History keeps up to 200 previous documents; a successful command that
+`place`, `moveTable`, `move`, `copy` (both acting on the selection) and `reference` (carrying its foreign key).
+Every operation is one click away from done: creating a reference needs a fresh ID, so `referenceAction(state, cell)`
+resolves that click outside the reducer, through `referenceBlock` (which N side-by-side cells a click stands for).
+One-shot operations return to `select`; Cancel/Escape changes UI state only. `reconcileUi` keeps an attribute
+selection within one table and ends "Add to selection" when the selection is empty. History keeps up to 200 previous documents; a successful command that
 changes the document pushes one entry (or merges with the previous entry for the same `coalesceKey`), and an unchanged
 or failed command pushes nothing. Undo/redo end any running operation and `reconcileUi` drops selections that no longer
 exist.
@@ -278,7 +284,7 @@ E2E hook fails any test that triggers a request to another host.
 
 - **Restricted names** (not in the plan): letters, digits, dashes and underscores only, so the text export needs no
   quoting or escaping. Form-field labels stay free text and are converted when placed.
-- **Copy data is a plain-text description, not the internal document as JSON** (plan §6.2 says "serialize a
+- **Copy as text is a plain-text description, not the internal document as JSON** (plan §6.2 says "serialize a
   complete, versioned `KrijtDocument` to plain JSON text"). The internal format's random IDs made references
   unreadable; the text keeps what is needed to understand the answer (tables, column order, notation, references)
   and drops internal IDs, layout (the image carries it), the form-field list (it comes from the exercise) and a
@@ -289,31 +295,28 @@ E2E hook fails any test that triggers a request to another host.
   reference is made, pair up left to right, and every edit keeps them that way: shifting reorders inside the end or
   moves the block, moving a member brings the whole end, insertions snap out of it. A reference end that moves follows to the destination table.
   Not expressible: overlapping composite keys such as (a,b), (a,c), (b,c) in one table.
-- **Two entry points for Move/Copy.** The plan wants both "selection → command" and "command → selection". The tool
-  strip starts with an empty selection; **Move to… / Copy to…** use the current selection and skip straight to the
-  destination. Carrying an old selection into the tool proved easy to miss (attributes moved that the student had only
-  selected to mark a flag).
+- **One entry point for Move/Copy/Reference: the selection.** The plan wants both "selection → command" and "command →
+  selection"; the second (a tool strip that started empty) was dropped as redundant with the context toolbar.
 - **After Move/Copy, the result is selected** (the moved attributes, or the new copies), so the student sees where it
   went and can mark flags right away.
 - **Insertion by cell halves.** Instead of separate thin gap targets, the left/right half of any cell chooses
   before/after, with an insertion-bar preview. A table header (or the + cell) appends.
 - **Delete without confirmation** (tables and attributes), since undo restores them; M1 asked for confirmation before
   undo existed.
-- **Tool strip as a column** at the canvas edge rather than in the top bar, so the top bar fits the selection actions
-  in one row at laptop widths and keeps a fixed height.
+- **No tool strip or instruction bar.** Actions sit in a context toolbar next to the selection; an operation shows
+  as its pressed button (pressing it again cancels) and is explained by the canvas previews, with a hidden live region
+  for screen readers. The diagram panel's header holds undo/redo, zoom (no percentage; Ctrl/⌘+0 resets) and copy.
 - **Keyboard:** ← → reorder selected attributes (they nudge a selected table, with ↑ ↓); Enter renames a single
-  selected attribute or advances Move/Copy; Delete/Backspace deletes selected attributes.
+  selected attribute; Delete/Backspace deletes selected attributes.
 - **Undo history is not saved** across a reload; only the document is.
 - Unchanged from M1: click-based table movement and pan/zoom/fit are included; source-field reordering is not
   (optional in the plan); selection and the active operation are not restored on reload; dark mode keeps cells as light
-  "paper"; the UI is English with Dutch subtitles; Krash's tokens and base styles are reused.
+  "paper"; the UI is English (panel headers without Dutch subtitles); Krash's tokens and base styles are reused.
 
-- **References (M3)**: the tool starts empty and **Reference from…** uses the selection, as with Move/Copy. A reference
+- **References (M3)**: **Reference** uses the selection, as Move/Copy do. A reference
   within one table is allowed (structure only); an attribute referring to itself and an exact duplicate are not.
   Deleting an attribute that belongs to a composite end removes the whole reference (§4.7 "removes or handles").
   Editing a reference's ends is not offered; delete and redraw.
-- **Key hints in filled buttons** (Next/Finish) were unreadable (white on the light key background); fixed for M2's
-  Next as well.
 
 - **Export (M4)** is drawn on a 2D canvas from a pure scene (`exportScene`), built from the same `layoutRelation` /
   `layoutReferences` and measurer as the screen, rather than by serializing the on-screen SVG; this needs no font
@@ -323,8 +326,6 @@ E2E hook fails any test that triggers a request to another host.
   with the finished blob.
 - **Straight connectors**: when two ends lie one above the other and overlap horizontally, the connector is a single
   straight line; each end's contact point (or brace tip) may move up to a quarter of its width from the centre.
-- **Narrow selection bar**: below about 1180px of bar width, Move to… / Copy to… / Reference from… / Delete show only
-  their icons (names and tooltips remain); below about 860px also Rename and the notation samples.
 - **Shortcuts are off while a dialog is open**, checked in the DOM (React state lags behind the dialog's close event).
 - **No `beforeunload` warning** on closing the tab: lockdown browsers and test runners handle it unpredictably, and a
   reload already restores the work.

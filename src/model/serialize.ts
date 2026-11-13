@@ -1,5 +1,5 @@
 /**
- * The text a student can copy ("Copy data"): the diagram as plain text, meant
+ * The text a student can copy ("Copy as text"): the diagram as plain text, meant
  * to be understood by reading it. Export only; Krijt never imports it
  * (session recovery uses the internal document format instead).
  *

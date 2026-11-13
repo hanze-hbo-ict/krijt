@@ -93,12 +93,7 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
   return (
     <aside className="panel sidebar" aria-labelledby="fields-title">
       <div className="panel-header">
-        <div>
-          <h2 id="fields-title">Form fields</h2>
-          <p className="panel-subtitle" lang="nl">
-            Formuliervelden
-          </p>
-        </div>
+        <h2 id="fields-title">Form fields</h2>
         <button
           type="button"
           className="icon-button"

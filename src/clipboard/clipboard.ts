@@ -106,10 +106,10 @@ export function failureMessage(kind: 'image' | 'data', reason: CopyFailure, deta
       return 'Copying needs a secure (https) page. Open Krijt over https and try again.'
     case 'unsupported':
       return kind === 'image'
-        ? 'This browser cannot put images on the clipboard. Try another browser, or use Copy data if text answers are allowed.'
+        ? 'This browser cannot put images on the clipboard. Try another browser, or use Copy as text if text answers are allowed.'
         : 'This browser cannot put text on the clipboard.'
     case 'blocked':
-      return `The browser blocked the clipboard. Allow clipboard access for this page, then click Copy ${kind} again.`
+      return `The browser blocked the clipboard. Allow clipboard access for this page, then click Copy as ${kind === 'image' ? 'image' : 'text'} again.`
     case 'failed':
       return `Copying failed${detail ? ` (${detail})` : ''}. Nothing was copied; try again.`
   }

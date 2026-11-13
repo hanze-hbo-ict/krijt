@@ -17,11 +17,9 @@ import { DEFAULT_VIEWPORT, type Viewport } from '../geometry/viewport'
 export type Selection =
   | { kind: 'none' }
   | { kind: 'relation'; relationId: Id }
-  /** Attributes in click order, possibly from several tables. */
+  /** Attributes in click order, all in one table (reconcileUi enforces this). */
   | { kind: 'attributes'; attributeIds: Id[] }
   | { kind: 'reference'; referenceId: Id }
-
-export type Phase = 'selecting' | 'destination'
 
 export type Operation =
   | { kind: 'select' }
@@ -29,18 +27,17 @@ export type Operation =
   | { kind: 'place' }
   /** Click-based table movement: the next click on the canvas is the new position. */
   | { kind: 'moveTable'; relationId: Id }
-  /** Move attributes: select them (clicks toggle), Next, then click a destination. */
-  | { kind: 'move'; phase: Phase }
-  /** Copy attributes: as Move, but the originals stay and copies get new IDs. */
-  | { kind: 'copy'; phase: Phase }
+  /** Copy a table: the next click on the canvas is where the (unnamed) copy goes. */
+  | { kind: 'copyTable'; relationId: Id }
+  /** Move the selected attributes: the next click on the canvas is the destination. */
+  | { kind: 'move' }
+  /** Copy the selected attributes: as Move, but the originals stay and copies get new IDs. */
+  | { kind: 'copy' }
   /**
-   * Create a reference: click the foreign-key attributes (side by side in one table), Next, click the referenced
-   * attributes (side by side in one table, same number), Finish. Lists are in click order while picking; the
-   * reference pairs them left to right in table order.
+   * Create a reference from the selected attributes (the foreign key, side by side in one table): one click
+   * on a cell picks that many side-by-side referenced attributes (see referenceBlock in interaction.ts).
    */
-  | { kind: 'reference'; phase: ReferencePhase; source: Id[]; target: Id[] }
-
-export type ReferencePhase = 'source' | 'target'
+  | { kind: 'reference'; source: Id[] }
 
 export type Editing =
   | null
@@ -53,7 +50,10 @@ export type Message = { kind: 'error' | 'info'; text: string }
 export type UiState = {
   operation: Operation
   selection: Selection
-  /** In the normal state, clicks on cells add to / remove from the selection instead of replacing it. */
+  /**
+   * "Add to selection": clicks on cells of the selected table add or remove them instead of replacing the
+   * selection. Only meaningful while attributes are selected; reconcileUi switches it off otherwise.
+   */
   multiSelect: boolean
   /** Selected source fields, in click order (placement uses inventory order). */
   selectedFieldIds: Id[]
@@ -103,25 +103,13 @@ export type Action =
   | { type: 'command'; command: Command; after?: Partial<UiState>; coalesceKey?: string }
   | { type: 'ui'; patch: Partial<UiState> }
   | { type: 'toggleField'; fieldId: Id }
-  | { type: 'toggleAttribute'; attributeId: Id }
   | { type: 'startPlace' }
   | { type: 'startMoveTable'; relationId: Id }
-  /**
-   * Start Move/Copy. From the tool strip (`fromSelection` false) it starts empty: select, then Next.
-   * From the selection's "Move to… / Copy to…" it uses the current selection and goes straight to the destination.
-   */
-  | { type: 'startAttributes'; kind: 'move' | 'copy'; fromSelection?: boolean }
-  /** Move/Copy: finish selecting and choose a destination. Reference: finish the foreign key, choose referenced attributes. */
-  | { type: 'next' }
-  /** Reference: back from the referenced attributes to the foreign key. */
-  | { type: 'back' }
-  /**
-   * Start Reference. From the tool strip it starts empty; from the selection's "Reference from…" the selected
-   * attributes become the foreign key and, if they lie in one table, it goes straight to step 2.
-   */
-  | { type: 'startReference'; fromSelection?: boolean }
-  /** Reference: a click on a cell adds it to (or removes it from) the end being chosen. */
-  | { type: 'pickReferenceAttribute'; attributeId: Id }
+  | { type: 'startCopyTable'; relationId: Id }
+  /** Move/Copy the selected attributes (Move / Copy in the toolbar): choose a destination next. */
+  | { type: 'startAttributes'; kind: 'move' | 'copy' }
+  /** Reference in the toolbar: the selected attributes become the foreign key; choose the referenced attributes next. */
+  | { type: 'startReference' }
   /** Escape / Cancel: close an edit, end the operation, or clear the selection. */
   | { type: 'cancel' }
   | { type: 'undo' }
@@ -134,14 +122,6 @@ export function selectedAttributeIds(ui: UiState): Id[] {
 }
 
 export const NO_ATTRIBUTES_MESSAGE = 'Select one or more attributes first.'
-export const NO_SOURCE_MESSAGE = 'Click the foreign-key attributes first.'
-export const SOURCE_ONE_TABLE_MESSAGE =
-  'The foreign-key attributes must all be in one table. Click a selected cell to remove it, or Cancel to start again.'
-export const TARGET_ONE_TABLE_MESSAGE =
-  'The referenced attributes must all be in one table. Click a selected cell to remove it, or Back to change the foreign key.'
-export const TARGET_IS_SOURCE_MESSAGE = 'That attribute is part of the foreign key. Click the attributes it refers to.'
-
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /** The table that owns each attribute. */
 export function attributeOwners(doc: KrijtDocument): Map<Id, Id> {
@@ -166,22 +146,24 @@ export function reconcileUi(doc: KrijtDocument, ui: UiState): UiState {
   let { selection, operation, editing } = ui
   if (selection.kind === 'relation' && !relationIds.has(selection.relationId)) selection = NO_SELECTION
   if (selection.kind === 'attributes') {
-    const kept = selection.attributeIds.filter((id) => attributeIds.has(id))
+    // Existing attributes only, and only those in the table of the first one.
+    const owner = attributeOwners(doc)
+    const table = owner.get(selection.attributeIds.find((id) => owner.has(id)) ?? '')
+    const kept = table === undefined ? [] : selection.attributeIds.filter((id) => owner.get(id) === table)
     if (kept.length !== selection.attributeIds.length) selection = kept.length ? { kind: 'attributes', attributeIds: kept } : NO_SELECTION
   }
   if (selection.kind === 'reference') {
     const id = selection.referenceId
     if (!doc.references.some((r) => r.id === id)) selection = NO_SELECTION
   }
-  if (operation.kind === 'moveTable' && !relationIds.has(operation.relationId)) operation = SELECT
+  if ((operation.kind === 'moveTable' || operation.kind === 'copyTable') && !relationIds.has(operation.relationId)) operation = SELECT
   if (operation.kind === 'reference') {
     const source = operation.source.filter((id) => attributeIds.has(id))
-    const target = operation.target.filter((id) => attributeIds.has(id))
-    if (source.length !== operation.source.length || target.length !== operation.target.length)
-      operation = { ...operation, source, target, phase: source.length ? operation.phase : 'source' }
+    if (source.length !== operation.source.length) operation = source.length ? { ...operation, source } : SELECT
   }
-  if ((operation.kind === 'move' || operation.kind === 'copy') && operation.phase === 'destination' && selection.kind !== 'attributes')
-    operation = { ...operation, phase: 'selecting' }
+  if ((operation.kind === 'move' || operation.kind === 'copy') && selection.kind !== 'attributes') operation = SELECT
+  // Add-to-selection mode never outlives the attribute selection it adds to.
+  const multiSelect = ui.multiSelect && selection.kind === 'attributes'
   if (editing) {
     const gone = editing.kind === 'attributeName' ? !attributeIds.has(editing.attributeId) : !relationIds.has(editing.relationId)
     if (gone) editing = null
@@ -191,8 +173,9 @@ export function reconcileUi(doc: KrijtDocument, ui: UiState): UiState {
     selection === ui.selection &&
     operation === ui.operation &&
     editing === ui.editing &&
+    multiSelect === ui.multiSelect &&
     selectedFieldIds.length === ui.selectedFieldIds.length
-  return same ? ui : { ...ui, selection, operation, editing, selectedFieldIds }
+  return same ? ui : { ...ui, selection, operation, editing, multiSelect, selectedFieldIds }
 }
 
 function pushHistory(h: History, doc: KrijtDocument, key: string | null): History {
@@ -227,111 +210,39 @@ export function reducer(state: AppState, action: Action): AppState {
       const selectedFieldIds = ids.includes(action.fieldId) ? ids.filter((id) => id !== action.fieldId) : [...ids, action.fieldId]
       return { ...state, ui: { ...state.ui, selectedFieldIds, message: null } }
     }
-    case 'toggleAttribute': {
-      if (!state.doc.relations.some((r) => r.attributes.some((a) => a.id === action.attributeId))) return state
-      const ids = selectedAttributeIds(state.ui)
-      const next = ids.includes(action.attributeId) ? ids.filter((id) => id !== action.attributeId) : [...ids, action.attributeId]
-      const selection: Selection = next.length ? { kind: 'attributes', attributeIds: next } : NO_SELECTION
-      return { ...state, ui: { ...state.ui, selection, message: null } }
-    }
     case 'startPlace':
       return { ...state, ui: { ...state.ui, operation: { kind: 'place' }, editing: null, message: null } }
     case 'startMoveTable':
+    case 'startCopyTable':
       if (!state.doc.relations.some((r) => r.id === action.relationId)) return state
       return {
         ...state,
         ui: {
           ...state.ui,
-          operation: { kind: 'moveTable', relationId: action.relationId },
+          operation: { kind: action.type === 'startMoveTable' ? 'moveTable' : 'copyTable', relationId: action.relationId },
           selection: { kind: 'relation', relationId: action.relationId },
           editing: null,
           message: null,
         },
       }
     case 'startAttributes': {
-      // Never carry over a selection silently: only "Move to… / Copy to…" (acting on the selection) uses it.
-      const useSelection = action.fromSelection === true && state.ui.selection.kind === 'attributes'
-      return {
-        ...state,
-        ui: {
-          ...state.ui,
-          operation: { kind: action.kind, phase: useSelection ? 'destination' : 'selecting' },
-          selection: useSelection ? state.ui.selection : NO_SELECTION,
-          editing: null,
-          message: null,
-        },
-      }
+      if (state.ui.selection.kind !== 'attributes')
+        return { ...state, ui: { ...state.ui, message: { kind: 'error', text: NO_ATTRIBUTES_MESSAGE } } }
+      return { ...state, ui: { ...state.ui, operation: { kind: action.kind }, editing: null, message: null } }
     }
     case 'startReference': {
-      const sel = selectedAttributeIds(state.ui)
-      const source = action.fromSelection === true ? sel : []
-      const oneTable = source.length > 0 && commonRelation(state.doc, source) !== null
-      const adjacent = oneTable && isContiguous(state.doc, source)
-      const message: Message | null =
-        source.length === 0 ? null : !oneTable ? { kind: 'error', text: SOURCE_ONE_TABLE_MESSAGE } : !adjacent ? { kind: 'error', text: REFERENCE_ADJACENT_ERROR } : null
-      return {
-        ...state,
-        ui: {
-          ...state.ui,
-          operation: { kind: 'reference', phase: adjacent ? 'target' : 'source', source, target: [] },
-          selection: NO_SELECTION,
-          editing: null,
-          message,
-        },
-      }
-    }
-    case 'pickReferenceAttribute': {
-      const op = state.ui.operation
-      if (op.kind !== 'reference') return state
-      const owner = attributeOwners(state.doc)
-      const table = owner.get(action.attributeId)
-      if (!table) return state
+      const source = selectedAttributeIds(state.ui)
       const error = (text: string): AppState => ({ ...state, ui: { ...state.ui, message: { kind: 'error', text } } })
-      const list = op.phase === 'source' ? op.source : op.target
-      if (list.includes(action.attributeId)) {
-        const next = list.filter((id) => id !== action.attributeId)
-        const operation: Operation = op.phase === 'source' ? { ...op, source: next } : { ...op, target: next }
-        return { ...state, ui: { ...state.ui, operation, message: null } }
-      }
-      if (op.phase === 'source') {
-        if (op.source.length > 0 && owner.get(op.source[0]!) !== table) return error(SOURCE_ONE_TABLE_MESSAGE)
-        return { ...state, ui: { ...state.ui, operation: { ...op, source: [...op.source, action.attributeId] }, message: null } }
-      }
-      if (op.source.includes(action.attributeId)) return error(TARGET_IS_SOURCE_MESSAGE)
-      if (op.target.length > 0 && owner.get(op.target[0]!) !== table) return error(TARGET_ONE_TABLE_MESSAGE)
-      if (op.target.length >= op.source.length)
-        return error(
-          `The foreign key has ${plural(op.source.length, 'attribute')}, and ${op.source.length === 1 ? 'it is' : 'all are'} matched. Click a selected cell to remove it, or choose Finish.`,
-        )
-      return { ...state, ui: { ...state.ui, operation: { ...op, target: [...op.target, action.attributeId] }, message: null } }
-    }
-    case 'back': {
-      const op = state.ui.operation
-      if (op.kind !== 'reference' || op.phase !== 'target') return state
-      return { ...state, ui: { ...state.ui, operation: { ...op, phase: 'source', target: [] }, message: null } }
-    }
-    case 'next': {
-      const op = state.ui.operation
-      if (op.kind === 'reference') {
-        if (op.phase !== 'source') return state
-        if (op.source.length === 0) return { ...state, ui: { ...state.ui, message: { kind: 'error', text: NO_SOURCE_MESSAGE } } }
-        if (commonRelation(state.doc, op.source) === null)
-          return { ...state, ui: { ...state.ui, message: { kind: 'error', text: SOURCE_ONE_TABLE_MESSAGE } } }
-        if (!isContiguous(state.doc, op.source)) return { ...state, ui: { ...state.ui, message: { kind: 'error', text: REFERENCE_ADJACENT_ERROR } } }
-        return { ...state, ui: { ...state.ui, operation: { ...op, phase: 'target' }, message: null } }
-      }
-      if ((op.kind !== 'move' && op.kind !== 'copy') || op.phase !== 'selecting') return state
-      if (selectedAttributeIds(state.ui).length === 0)
-        return { ...state, ui: { ...state.ui, message: { kind: 'error', text: NO_ATTRIBUTES_MESSAGE } } }
-      return { ...state, ui: { ...state.ui, operation: { ...op, phase: 'destination' }, message: null } }
+      if (source.length === 0) return error(NO_ATTRIBUTES_MESSAGE)
+      if (!isContiguous(state.doc, source)) return error(REFERENCE_ADJACENT_ERROR)
+      return { ...state, ui: { ...state.ui, operation: { kind: 'reference', source }, editing: null, message: null } }
     }
     case 'cancel': {
       const ui = state.ui
       if (ui.editing) return { ...state, ui: { ...ui, editing: null } }
       if (ui.operation.kind !== 'select') return { ...state, ui: { ...ui, operation: SELECT, message: null } }
       if (ui.message) return { ...state, ui: { ...ui, message: null } }
-      if (ui.selection.kind !== 'none') return { ...state, ui: { ...ui, selection: NO_SELECTION } }
-      if (ui.multiSelect) return { ...state, ui: { ...ui, multiSelect: false } }
+      if (ui.selection.kind !== 'none') return { ...state, ui: { ...ui, selection: NO_SELECTION, multiSelect: false } }
       return state
     }
     case 'undo': {

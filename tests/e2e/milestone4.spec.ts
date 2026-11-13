@@ -1,11 +1,11 @@
-/** Milestone 4 in real browsers: Copy image / Copy data, clipboard errors, New diagram, recovery, a larger diagram. */
+/** Milestone 4 in real browsers: Copy image / Copy data, clipboard errors, Clear diagram, recovery, a larger diagram. */
 import { expect, test, type Page } from '@playwright/test'
 
 const SESSION_KEY = 'krijt:v1:session'
 const canvas = (page: Page) => page.locator('.canvas-svg')
 const relations = (page: Page) => page.locator('.relation')
-const copyImage = (page: Page) => page.getByRole('button', { name: 'Copy image' })
-const copyData = (page: Page) => page.getByRole('button', { name: 'Copy data' })
+const copyImage = (page: Page) => page.getByRole('button', { name: 'Copy as image' })
+const copyData = (page: Page) => page.getByRole('button', { name: 'Copy as text' })
 const status = (page: Page) => page.locator('.bar-message.info')
 const alert = (page: Page) => page.locator('.bar-message.error')
 
@@ -159,10 +159,10 @@ test.describe('clipboard errors (all browsers)', () => {
     })
     await openWith(page, SAMPLE)
     await copyImage(page).click()
-    await expect(alert(page)).toHaveText(/blocked the clipboard.*Copy image again/)
+    await expect(alert(page)).toHaveText(/blocked the clipboard.*Copy as image again/)
     await expect(status(page)).toHaveCount(0)
     await copyData(page).click()
-    await expect(alert(page)).toHaveText(/blocked the clipboard.*Copy data again/)
+    await expect(alert(page)).toHaveText(/blocked the clipboard.*Copy as text again/)
     await expect(copyImage(page)).toBeEnabled()
   })
 
@@ -182,15 +182,15 @@ test.describe('clipboard errors (all browsers)', () => {
   })
 })
 
-test('New diagram asks first, can keep the form fields, is undoable, and the recovery copy follows', async ({ page }) => {
+test('Clear diagram asks first, can keep the form fields, is undoable, and the recovery copy follows', async ({ page }) => {
   await openWith(page, SAMPLE)
-  await page.getByRole('button', { name: 'New', exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: 'Start a new diagram?' })
+  await page.getByRole('button', { name: 'Clear diagram', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Clear the diagram?' })
   await expect(dialog).toBeVisible()
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   await expect(relations(page)).toHaveCount(4)
 
-  await page.getByRole('button', { name: 'New', exact: true }).click()
+  await page.getByRole('button', { name: 'Clear diagram', exact: true }).click()
   await dialog.getByRole('button', { name: 'Clear diagram, keep form fields' }).click()
   await expect(relations(page)).toHaveCount(0)
   await expect(page.locator('.reference')).toHaveCount(0)
@@ -198,7 +198,7 @@ test('New diagram asks first, can keep the form fields, is undoable, and the rec
   await page.keyboard.press('ControlOrMeta+z')
   await expect(relations(page)).toHaveCount(4)
 
-  await page.getByRole('button', { name: 'New', exact: true }).click()
+  await page.getByRole('button', { name: 'Clear diagram', exact: true }).click()
   await dialog.getByRole('button', { name: 'Clear everything' }).click()
   await expect(relations(page)).toHaveCount(0)
   await page.reload()
@@ -257,8 +257,9 @@ test('a realistic exam diagram (25 fields, 10 tables, 12 references) stays respo
       await expect(page.locator('.cell[aria-label^="Attribute attr5_2 in"]')).toHaveAttribute('aria-pressed', 'true')
     }),
     await timed(async () => {
-      await page.getByRole('group', { name: 'Tools' }).getByRole('button', { name: 'Reference', exact: true }).click()
-      await expect(page.getByText('step 1 of 2: foreign key')).toBeVisible()
+      const start = page.getByRole('toolbar', { name: 'Selection actions' }).getByRole('button', { name: 'Reference', exact: true })
+      await start.click()
+      await expect(start).toHaveAttribute('aria-pressed', 'true')
       await page.keyboard.press('Escape')
     }),
   ]

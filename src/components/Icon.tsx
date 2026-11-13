@@ -15,6 +15,8 @@ const PATHS: Record<string, string[]> = {
   undo: ['M9 14 4 9l5-5', 'M4 9h11a5 5 0 0 1 0 10h-3'],
   redo: ['m15 14 5-5-5-5', 'M20 9H9a5 5 0 0 0 0 10h3'],
   pointer: ['M5 3l14 7-6 2-2 6-6-15Z'],
+  /** A pointer with a + badge: clicks add to the selection. */
+  selectMore: ['M3.5 2.5l13 6.5-5.5 1.9-1.9 5.5-5.6-13.9Z', 'M18.5 14v7M15 17.5h7'],
   multi: ['M3 8h6v6H3z', 'M11 8h6v6h-6z', 'M5 11l1 1 2-2', 'M13 11l1 1 2-2', 'M19 8h2v6h-2'],
   copy: ['M9 9h10v11H9z', 'M15 9V5a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3'],
   left: ['M15 6l-6 6 6 6'],
@@ -22,8 +24,8 @@ const PATHS: Record<string, string[]> = {
   reference: ['M4 6h6v4H4z', 'M14 14h6v4h-6z', 'M7 10v6h4.5', 'm10 13.5 2.5 2.5-2.5 2.5'],
   back: ['M15 6l-6 6 6 6'],
   image: ['M4 5h16v14H4z', 'm4 16 5-5 4 4 2-2 5 5', 'M15.5 9.5h.01'],
-  data: ['M9 4H7a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3a2 2 0 0 0 2 2h2', 'M15 4h2a2 2 0 0 1 2 2v3a2 2 0 0 0 2 2 2 2 0 0 0-2 2v3a2 2 0 0 1-2 2h-2'],
-  file: ['M6 3h8l4 4v14H6z', 'M14 3v4h4', 'M12 11v6M9 14h6'],
+  /** A cross in a circle, as in a search field's clear button (Clear diagram). */
+  clear: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'm9 9 6 6M15 9l-6 6'],
 }
 
 export function Icon({ name, size }: { name: keyof typeof PATHS | string; size?: number }) {

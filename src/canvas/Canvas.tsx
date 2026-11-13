@@ -21,25 +21,26 @@ import {
 } from 'react'
 import { addAttributesFromNames } from '../commands/builders'
 import { orderAttributeIds } from '../commands/commands'
-import { Icon } from '../components/Icon'
 import { InlineInput } from '../components/InlineInput'
 import { toValidName, typedName } from '../model/names'
 import { contentBounds, layoutRelation, METRICS, type RelationLayout, type TextMeasurer } from '../geometry/layout'
-import { layoutReferences } from '../geometry/references'
+import { layoutReferences, polylinePath, type ReferenceGeometry } from '../geometry/references'
 import { fitToBounds, panBy, screenToWorld, zoomAt, type Viewport } from '../geometry/viewport'
-import type { Id, Point } from '../model/types'
+import type { Id, Point, Reference } from '../model/types'
 import { selectedAttributeIds, type Action, type AppState } from '../state/appState'
 import {
   choosingDestination,
   describeReference,
   destinationFor,
-  nextStepAction,
+  newTablePosition,
+  referenceIntent,
   resolveCanvasClick,
   transferAction,
   type CanvasTarget,
 } from '../state/interaction'
 import { ReferenceView } from './ReferenceView'
 import { RelationView, type CellMark } from './RelationView'
+import { SelectionToolbar, type ToolbarAnchor } from './SelectionToolbar'
 
 /** Screen pixels a pointer must travel before a press becomes a drag. */
 export const DRAG_THRESHOLD = 6
@@ -54,6 +55,12 @@ export interface CanvasHandle {
   /** Shows (or clears) the destination preview for an outside drag of `count` items. */
   previewAt(clientX: number, clientY: number, count: number): void
   clearPreview(): void
+  zoomIn(): void
+  zoomOut(): void
+  /** Fit the whole diagram in view. */
+  fit(): void
+  /** Back to 100%, around the middle of the view. */
+  resetZoom(): void
 }
 
 interface Props {
@@ -152,6 +159,8 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
   }, [layouts, drag, doc.relations, measurer])
   const referenceGeometry = useMemo(() => layoutReferences(doc.references, shownLayouts), [doc.references, shownLayouts])
 
+  const zoomCenter = { x: size.width / 2, y: size.height / 2 }
+
   const toWorld = (clientX: number, clientY: number): Point => {
     const rect = svgRef.current!.getBoundingClientRect()
     return screenToWorld(stateRef.current.ui.viewport, { x: clientX - rect.left, y: clientY - rect.top })
@@ -175,11 +184,36 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     clearPreview() {
       setHover(null)
     },
+    zoomIn: () => setViewport(zoomAt(stateRef.current.ui.viewport, ZOOM_STEP, zoomCenter)),
+    zoomOut: () => setViewport(zoomAt(stateRef.current.ui.viewport, 1 / ZOOM_STEP, zoomCenter)),
+    fit: () => setViewport(fitToBounds(contentBounds(stateRef.current.doc, measurer), size)),
+    resetZoom: () => {
+      const v = stateRef.current.ui.viewport
+      setViewport(zoomAt(v, 1 / v.zoom, zoomCenter))
+    },
   }))
 
-  const activate = (target: CanvasTarget, point: Point) => {
-    const action = resolveCanvasClick(stateRef.current, target, point)
+  const activate = (target: CanvasTarget, point: Point, additive = false) => {
+    const action = resolveCanvasClick(stateRef.current, target, point, additive)
     if (action) dispatch(action)
+  }
+
+  /** Whether the pointer (or focus) previews what a click would do: a destination, a reference, a table's new place. */
+  const previewing = (s: AppState) => choosingDestination(s) !== null || s.ui.operation.kind === 'reference' || s.ui.operation.kind === 'moveTable' || s.ui.operation.kind === 'copyTable'
+
+  // Keyboard users get the same preview as the pointer, for the focused cell or table.
+  const onFocus = (e: React.FocusEvent<SVGSVGElement>) => {
+    const s = stateRef.current
+    if (!previewing(s)) return
+    const target = targetFrom(e.target as Element)
+    if (target.kind === 'empty' || target.kind === 'reference') return
+    const box = (e.target as Element).getBoundingClientRect()
+    const count = s.ui.operation.kind === 'place' ? s.ui.selectedFieldIds.length : selectedAttributeIds(s.ui).length
+    setHover({
+      target: target.kind === 'attribute' ? { ...target, side: 'after' } : target,
+      point: toWorld(box.left + box.width / 2, box.top + box.height / 2),
+      count: Math.max(count, 1),
+    })
   }
 
   const onPointerDown = (e: PointerEvent<SVGSVGElement>) => {
@@ -221,10 +255,10 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
       setHover(hit ? { ...hit, count: n } : null)
       return
     }
-    // Destination preview while choosing a destination by clicks.
-    if (choosingDestination(s)) {
+    // Preview of what a click would do: a destination, a reference, or a table's new place.
+    if (previewing(s)) {
       const count = s.ui.operation.kind === 'place' ? s.ui.selectedFieldIds.length : selectedAttributeIds(s.ui).length
-      setHover({ target: targetFrom(e.target as Element, e.clientX), point: toWorld(e.clientX, e.clientY), count })
+      setHover({ target: targetFrom(e.target as Element, e.clientX), point: toWorld(e.clientX, e.clientY), count: Math.max(count, 1) })
     } else if (hover) setHover(null)
   }
 
@@ -258,7 +292,7 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     if (cancelled) return
     // A press that wandered off (beyond the threshold) without being a drag is not a click.
     if (Math.hypot(e.clientX - p.start.x, e.clientY - p.start.y) >= DRAG_THRESHOLD) return
-    activate(p.target, toWorld(e.clientX, e.clientY))
+    activate(p.target, toWorld(e.clientX, e.clientY), e.shiftKey)
   }
 
   const onKeyDown = (e: KeyboardEvent<SVGSVGElement>) => {
@@ -268,12 +302,6 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     e.preventDefault()
     e.stopPropagation()
     const s = stateRef.current
-    // While choosing attributes for Move/Copy/Reference, Enter is always Next/Finish (Space toggles the focused cell).
-    const step = e.key === 'Enter' ? nextStepAction(s) : null
-    if (step) {
-      dispatch(step)
-      return
-    }
     if (target.kind === 'reference') {
       activate(target, { x: 0, y: 0 })
       return
@@ -313,7 +341,20 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
   const op = ui.operation
   const choosing = choosingDestination(state)
   const destinationMode = choosing !== null || drag?.kind === 'attributes'
-  const selectedSet = useMemo(() => new Set(selection.kind === 'attributes' ? selection.attributeIds : []), [selection])
+  // While creating a reference, its foreign key shows as such rather than as the selection.
+  const selectedSet = useMemo(
+    () => new Set(selection.kind === 'attributes' && op.kind !== 'reference' ? selection.attributeIds : []),
+    [selection, op.kind],
+  )
+  // The reference a click on the hovered (or focused) cell would create: its ends and connector.
+  const referencePreview = useMemo(() => {
+    if (op.kind !== 'reference' || hover?.target.kind !== 'attribute') return null
+    const intent = referenceIntent(state, hover.target.attributeId)
+    if (!intent || 'problem' in intent) return null
+    const ref: Reference = { id: 'preview', from: intent.from, to: intent.to }
+    const geometry = layoutReferences([...doc.references, ref], layouts).find((g) => g.referenceId === 'preview') ?? null
+    return { to: intent.to, geometry }
+  }, [op, hover, state, doc.references, layouts])
   const draggedSet = useMemo(() => new Set(drag?.kind === 'attributes' ? drag.attributeIds : []), [drag])
   const editing = ui.editing
 
@@ -325,7 +366,7 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     if (op.kind === 'reference') {
       const numbered = op.source.length > 1
       mark(op.source, 'source', numbered)
-      mark(op.target, 'target', numbered)
+      if (referencePreview) mark(referencePreview.to.attributeIds, 'target', numbered)
     } else if (selection.kind === 'reference') {
       const ref = doc.references.find((r) => r.id === selection.referenceId)
       if (ref) {
@@ -335,7 +376,7 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
       }
     }
     return map
-  }, [op, selection, doc])
+  }, [op, selection, doc, referencePreview])
   const referenceLabels = useMemo(() => {
     const map = new Map<Id, string>()
     for (const ref of doc.references) {
@@ -353,8 +394,49 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     fontSize: METRICS.fontSize * viewport.zoom,
   })
 
+  // Where the context toolbar attaches: the selected table or cells, or beside a selected reference's line.
+  // It stays during the operations it starts (with that button pressed), but not while dragging or renaming.
+  const toolbarAnchor = ((): ToolbarAnchor | null => {
+    if (op.kind === 'place' || drag || (editing && editing.kind !== 'newAttribute')) return null
+    const toScreen = (x: number, y: number, width: number, height: number) => ({
+      left: x * viewport.zoom + viewport.x,
+      top: y * viewport.zoom + viewport.y,
+      width: width * viewport.zoom,
+      height: height * viewport.zoom,
+    })
+    if (selection.kind === 'relation') {
+      const l = layouts.get(selection.relationId)
+      if (!l) return null
+      const top = Math.min(l.header.y, l.y)
+      return { rect: toScreen(l.x, top, Math.max(l.stripWidth, l.header.width), l.y + l.height - top), side: 'above' }
+    }
+    if (selection.kind === 'reference') {
+      const g = referenceGeometry.find((x) => x.referenceId === selection.referenceId)
+      const segment = g && longestSegment(g)
+      if (!segment) return null
+      const { mid, horizontal } = segment
+      return { rect: toScreen(mid.x, mid.y, 0, 0), side: horizontal ? 'above' : 'right' }
+    }
+    if (selection.kind === 'attributes') {
+      // One table: above its header band (which stays clickable), over the selected cells.
+      let table: RelationLayout | null = null
+      let x1 = Infinity
+      let x2 = -Infinity
+      for (const l of layouts.values())
+        for (const c of l.cells)
+          if (selection.attributeIds.includes(c.attributeId)) {
+            table = l
+            x1 = Math.min(x1, c.x)
+            x2 = Math.max(x2, c.x + c.width)
+          }
+      if (!table) return null
+      const top = Math.min(table.header.y, table.y)
+      return { rect: toScreen(x1, top, x2 - x1, table.y + table.height - top), side: 'above' }
+    }
+    return null
+  })()
+
   const grid = 20 * viewport.zoom
-  const zoomCenter = { x: size.width / 2, y: size.height / 2 }
   const preview = hover && hover.count > 0 && (destinationMode || hover.external) ? destinationFor(doc, hover.target, hover.point) : null
 
   return (
@@ -370,6 +452,8 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
         onPointerCancel={(e) => finishPress(e, true)}
         onPointerLeave={() => !dragRef.current && setHover(null)}
         onKeyDown={onKeyDown}
+        onFocus={onFocus}
+        onBlur={() => !dragRef.current && setHover(null)}
         onDoubleClick={onDoubleClick}
       >
         <defs>
@@ -384,7 +468,7 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
             const shown = dragged ? { ...r, position: { x: r.position.x + drag.dx, y: r.position.y + drag.dy } } : r
             const layout = shownLayouts.get(r.id)!
             const relSelected =
-              (selection.kind === 'relation' && selection.relationId === r.id) || (op.kind === 'moveTable' && op.relationId === r.id)
+              (selection.kind === 'relation' && selection.relationId === r.id) || ((op.kind === 'moveTable' || op.kind === 'copyTable') && op.relationId === r.id)
             return (
               <RelationView
                 key={r.id}
@@ -411,6 +495,8 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
             ))}
           </g>
           {preview && <DestinationPreview intent={preview} layouts={layouts} count={hover!.count} />}
+          {referencePreview?.geometry && <ReferencePreview geometry={referencePreview.geometry} />}
+          {(op.kind === 'moveTable' || op.kind === 'copyTable') && hover && <TablePreview layout={layouts.get(op.relationId)} point={hover.point} />}
         </g>
       </svg>
 
@@ -495,32 +581,7 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
           )
         })()}
 
-      <div className="zoom-controls" role="group" aria-label="Zoom">
-        <button type="button" className="icon-button" aria-label="Zoom out" data-tooltip="Zoom out" onClick={() => setViewport(zoomAt(viewport, 1 / ZOOM_STEP, zoomCenter))}>
-          <Icon name="minus" />
-        </button>
-        <button
-          type="button"
-          className="zoom-level"
-          aria-label={`Zoom ${Math.round(viewport.zoom * 100)}%, reset to 100%`}
-          onClick={() => setViewport(zoomAt(viewport, 1 / viewport.zoom, zoomCenter))}
-        >
-          {Math.round(viewport.zoom * 100)}%
-        </button>
-        <button type="button" className="icon-button" aria-label="Zoom in" data-tooltip="Zoom in" onClick={() => setViewport(zoomAt(viewport, ZOOM_STEP, zoomCenter))}>
-          <Icon name="plus" />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Fit diagram"
-          data-tooltip="Fit diagram"
-          data-tooltip-pos="above-end"
-          onClick={() => setViewport(fitToBounds(contentBounds(doc, measurer), size))}
-        >
-          <Icon name="fit" />
-        </button>
-      </div>
+      {toolbarAnchor && <SelectionToolbar state={state} dispatch={dispatch} anchor={toolbarAnchor} bounds={size} />}
     </div>
   )
 }
@@ -555,6 +616,46 @@ function DestinationPreview({
     <g className="preview" aria-hidden="true">
       <line className="preview-bar" x1={x} x2={x} y1={l.y - 7} y2={l.y + l.height + 7} />
       <path className="preview-caret" d={`M${x - 5} ${l.y - 12}h10l-5 6z M${x - 5} ${l.y + l.height + 12}h10l-5 -6z`} />
+    </g>
+  )
+}
+
+/** The middle of a reference's longest straight piece, where its toolbar goes. */
+function longestSegment(g: ReferenceGeometry): { mid: Point; horizontal: boolean } | null {
+  let best: { mid: Point; horizontal: boolean; length: number } | null = null
+  for (let i = 1; i < g.points.length; i++) {
+    const a = g.points[i - 1]!
+    const b = g.points[i]!
+    const length = Math.hypot(b.x - a.x, b.y - a.y)
+    if (!best || length > best.length)
+      best = { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, horizontal: Math.abs(b.x - a.x) >= Math.abs(b.y - a.y), length }
+  }
+  return best
+}
+
+/** The connector a click would create while choosing the referenced attributes. */
+function ReferencePreview({ geometry }: { geometry: ReferenceGeometry }) {
+  return (
+    <g className="preview preview-reference" aria-hidden="true">
+      <path className="reference-line" d={polylinePath(geometry.points)} />
+      <path className="reference-arrow" d={geometry.arrow} />
+      {geometry.braces.map((b) => (
+        <path key={b} className="reference-brace" d={b} />
+      ))}
+    </g>
+  )
+}
+
+/** Where Move table would put the table: its outline, following the pointer. */
+function TablePreview({ layout, point }: { layout: RelationLayout | undefined; point: Point }) {
+  if (!layout) return null
+  const at = newTablePosition(point)
+  const dx = at.x - layout.x
+  const dy = at.y - layout.y
+  return (
+    <g className="preview" aria-hidden="true" transform={`translate(${dx} ${dy})`}>
+      <rect className="preview-table" x={layout.header.x} y={layout.header.y} width={layout.header.width} height={layout.header.height} />
+      <rect className="preview-table" x={layout.x} y={layout.y} width={layout.stripWidth} height={layout.height} />
     </g>
   )
 }

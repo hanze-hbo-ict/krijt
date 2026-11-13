@@ -39,7 +39,7 @@ export type Command =
   /** Ends are stored in table order: the i-th foreign-key attribute (left to right) refers to the i-th referenced one. */
   | { type: 'addReference'; reference: Reference }
   | { type: 'deleteReference'; referenceId: Id }
-  /** New diagram: removes all tables and references, and also the form fields unless `keepFields`. */
+  /** Clear diagram: removes all tables and references, and also the form fields unless `keepFields`. */
   | { type: 'clearDocument'; keepFields: boolean }
 
 /** `notice` tells the student about dependent changes, e.g. references removed with an attribute. */

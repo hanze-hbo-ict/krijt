@@ -12,11 +12,10 @@ import { exportScale, exportScene } from '../clipboard/scene'
 import { serializeDocument } from '../model/serialize'
 import { readSession, safeSessionStorage, SAVE_DEBOUNCE_MS, saveSession, UNREADABLE_SESSION_MESSAGE } from '../persistence/session'
 import { initialState, reducer, selectedAttributeIds, SIDEBAR_MAX, SIDEBAR_MIN, type AppState } from '../state/appState'
-import { nextStepAction } from '../state/interaction'
-import { ContextBar, MessageBanner, ToolStrip } from './ContextBar'
+import { DiagramHeader } from './DiagramHeader'
+import { MessageBanner } from './MessageBanner'
 import { ClearDialog } from './ClearDialog'
 import { HelpDialog } from './HelpDialog'
-import { IS_MAC, MOD_KEY } from './platform'
 
 const NUDGE = 10
 
@@ -44,6 +43,15 @@ export function App() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [clearOpen, setClearOpen] = useState(false)
   const [copying, setCopying] = useState<'image' | 'data' | null>(null)
+  // After a confirmed copy, that button shows a checkmark for a moment (as Krash's copy buttons do).
+  const [copied, setCopied] = useState<'image' | 'data' | null>(null)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => void (copiedTimer.current && clearTimeout(copiedTimer.current)), [])
+  const confirmCopied = (kind: 'image' | 'data') => {
+    setCopied(kind)
+    if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    copiedTimer.current = setTimeout(() => setCopied(null), 1500)
+  }
   const [ghost, setGhost] = useState<DragGhost>(null)
   const canvasHandle = useRef<CanvasHandle | null>(null)
   const storage = useMemo(() => safeSessionStorage(), [])
@@ -87,7 +95,10 @@ export function App() {
     setCopying('image')
     void copyImage(browserEnv(), () => renderPng(scene, scale)).then((result) => {
       setCopying(null)
-      if (result.ok) say('info', COPY_MESSAGES.imageCopied)
+      if (result.ok) {
+        confirmCopied('image')
+        say('info', COPY_MESSAGES.imageCopied)
+      }
       else say('error', failureMessage('image', result.reason, result.detail))
     })
   }
@@ -95,7 +106,10 @@ export function App() {
     setCopying('data')
     void copyText(browserEnv(), serializeDocument(stateRef.current.doc)).then((result) => {
       setCopying(null)
-      if (result.ok) say('info', COPY_MESSAGES.dataCopied)
+      if (result.ok) {
+        confirmCopied('data')
+        say('info', COPY_MESSAGES.dataCopied)
+      }
       else say('error', failureMessage('data', result.reason, result.detail))
     })
   }
@@ -108,6 +122,11 @@ export function App() {
       const s = stateRef.current
       const mod = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
+      if (mod && !e.altKey && !e.shiftKey && key === '0') {
+        e.preventDefault()
+        canvasHandle.current?.resetZoom()
+        return
+      }
       if (mod && !e.altKey && (key === 'z' || key === 'y')) {
         e.preventDefault()
         dispatch({ type: key === 'y' || e.shiftKey ? 'redo' : 'undo' })
@@ -121,11 +140,7 @@ export function App() {
       const op = s.ui.operation
       const attrs = selectedAttributeIds(s.ui)
       if (e.key === 'Enter') {
-        const step = nextStepAction(s)
-        if (step) {
-          e.preventDefault()
-          dispatch(step)
-        } else if (op.kind === 'select' && attrs.length === 1) {
+        if (op.kind === 'select' && attrs.length === 1) {
           e.preventDefault()
           dispatch({ type: 'ui', patch: { editing: { kind: 'attributeName', attributeId: attrs[0]! } } })
         }
@@ -164,7 +179,6 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const { past, future } = state.history
 
   return (
     <div className="app">
@@ -179,65 +193,11 @@ export function App() {
           </div>
         </div>
         <div className="header-actions">
-          <div className="copy-actions" role="group" aria-label="Copy for your answer">
-            <button
-              type="button"
-              className="primary"
-              onClick={onCopyImage}
-              disabled={copying !== null || doc.relations.length === 0}
-              title={doc.relations.length === 0 ? 'Create a table first' : 'Copy the diagram as an image, to paste into your answer'}
-            >
-              <Icon name="image" />
-              {copying === 'image' ? 'Copying…' : 'Copy image'}
-            </button>
-            <button
-              type="button"
-              onClick={onCopyData}
-              disabled={copying !== null || doc.relations.length === 0}
-              title={doc.relations.length === 0 ? 'Create a table first' : 'Copy the diagram as plain text'}
-            >
-              <Icon name="data" />
-              {copying === 'data' ? 'Copying…' : 'Copy data'}
-            </button>
-          </div>
           {saveStatus !== 'ok' && (
             <span className="save-warning" role="status">
               {saveStatus === 'failed' ? 'Could not keep a copy for reload' : 'Reload recovery unavailable in this browser'}
             </span>
           )}
-          <div className="history-actions" role="group" aria-label="History">
-            <button
-              type="button"
-              className="icon-button header-icon"
-              aria-label="Undo"
-              aria-keyshortcuts={IS_MAC ? 'Meta+Z' : 'Control+Z'}
-              data-tooltip={`Undo (${MOD_KEY}+Z)`}
-              disabled={past.length === 0}
-              onClick={() => dispatch({ type: 'undo' })}
-            >
-              <Icon name="undo" />
-            </button>
-            <button
-              type="button"
-              className="icon-button header-icon"
-              aria-label="Redo"
-              aria-keyshortcuts={IS_MAC ? 'Meta+Shift+Z' : 'Control+Shift+Z'}
-              data-tooltip={`Redo (${MOD_KEY}+Shift+Z)`}
-              disabled={future.length === 0}
-              onClick={() => dispatch({ type: 'redo' })}
-            >
-              <Icon name="redo" />
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={() => setClearOpen(true)}
-            disabled={doc.relations.length === 0 && doc.sourceFields.length === 0}
-            title="Start again with an empty diagram"
-          >
-            <Icon name="file" />
-            New
-          </button>
           <button type="button" onClick={() => setHelpOpen(true)}>
             <Icon name="help" />
             Help
@@ -254,14 +214,22 @@ export function App() {
           label="Resize form fields sidebar"
           onChange={(w) => dispatch({ type: 'ui', patch: { sidebarWidth: w } })}
         />
-        <section className="panel diagram-panel" aria-label="Diagram">
-          <ContextBar state={state} dispatch={dispatch} />
-          <div className="diagram-body">
-            <ToolStrip state={state} dispatch={dispatch} />
-            <div className="canvas-area">
-              <Canvas state={state} dispatch={dispatch} measurer={measurer} handleRef={canvasHandle} onGhost={setGhost} />
-              <MessageBanner state={state} dispatch={dispatch} />
-            </div>
+        <section className="panel diagram-panel" aria-labelledby="diagram-title">
+          <DiagramHeader
+            state={state}
+            dispatch={dispatch}
+            copying={copying}
+            copied={copied}
+            onCopyImage={onCopyImage}
+            onCopyData={onCopyData}
+            onClear={() => setClearOpen(true)}
+            onZoomOut={() => canvasHandle.current?.zoomOut()}
+            onZoomIn={() => canvasHandle.current?.zoomIn()}
+            onFit={() => canvasHandle.current?.fit()}
+          />
+          <div className="canvas-area">
+            <Canvas state={state} dispatch={dispatch} measurer={measurer} handleRef={canvasHandle} onGhost={setGhost} />
+            <MessageBanner state={state} dispatch={dispatch} />
           </div>
         </section>
       </main>
@@ -287,7 +255,7 @@ export function App() {
                 selectedFieldIds: [],
                 editing: null,
                 viewport: DEFAULT_VIEWPORT,
-                message: { kind: 'info', text: 'New diagram. Undo brings the previous one back.' },
+                message: { kind: 'info', text: 'Diagram cleared. Undo brings it back.' },
               },
             })
           }

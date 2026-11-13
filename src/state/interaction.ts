@@ -12,11 +12,11 @@ import {
   toDestination,
   type DestinationIntent,
 } from '../commands/builders'
-import { expandToUnits, referenceBlocks, referenceProblem, snapIndex } from '../commands/commands'
+import { expandToUnits, orderAttributeIds, referenceBlocks, referenceProblem, snapIndex } from '../commands/commands'
 import { toValidName } from '../model/names'
 import type { Id, KrijtDocument, Point, Reference, ReferenceEnd } from '../model/types'
 import { METRICS } from '../geometry/layout'
-import { commonRelation, NO_SELECTION, SELECT, selectedAttributeIds, type Action, type AppState, type Selection } from './appState'
+import { attributeOwners, commonRelation, NO_SELECTION, SELECT, selectedAttributeIds, type Action, type AppState } from './appState'
 
 export type CanvasTarget =
   | { kind: 'empty' }
@@ -94,13 +94,56 @@ export function transferAction(state: AppState, kind: 'move' | 'copy', attribute
   return { type: 'command', command: copy.command, after: { operation: SELECT, selection: { kind: 'attributes', attributeIds: copy.newIds } } }
 }
 
-function toggled(selection: Selection, attributeId: Id): Selection {
-  const ids = selection.kind === 'attributes' ? selection.attributeIds : []
-  const next = ids.includes(attributeId) ? ids.filter((id) => id !== attributeId) : [...ids, attributeId]
-  return next.length ? { kind: 'attributes', attributeIds: next } : NO_SELECTION
+/**
+ * The referenced attributes a click on `attributeId` stands for while creating a reference from `source`:
+ * that many side-by-side cells, starting at the clicked one and shifted left where needed to fit the table.
+ * Null if the table has too few attributes (the cell is not in a table, or there is no source).
+ */
+export function referenceBlock(doc: KrijtDocument, source: Id[], attributeId: Id): Id[] | null {
+  const need = source.length
+  const r = doc.relations.find((x) => x.attributes.some((a) => a.id === attributeId))
+  if (!r || need === 0 || r.attributes.length < need) return null
+  const i = r.attributes.findIndex((a) => a.id === attributeId)
+  const start = Math.min(i, r.attributes.length - need)
+  return r.attributes.slice(start, start + need).map((a) => a.id)
 }
 
-export function resolveCanvasClick(state: AppState, target: CanvasTarget, point: Point): Action | null {
+/** The reference a click on `attributeId` would create, or why it cannot. */
+export function referenceIntent(state: AppState, attributeId: Id): { from: ReferenceEnd; to: ReferenceEnd } | { problem: string } | null {
+  const op = state.ui.operation
+  if (op.kind !== 'reference') return null
+  const { doc } = state
+  const block = referenceBlock(doc, op.source, attributeId)
+  if (!block) {
+    const r = doc.relations.find((x) => x.attributes.some((a) => a.id === attributeId))
+    if (!r) return null
+    return {
+      problem: `This table has only ${n(r.attributes.length, 'attribute')}; the foreign key has ${op.source.length}.`,
+    }
+  }
+  const owner = attributeOwners(doc)
+  const from: ReferenceEnd = { relationId: owner.get(op.source[0]!) ?? '', attributeIds: orderAttributeIds(doc, op.source) }
+  const to: ReferenceEnd = { relationId: owner.get(block[0]!) ?? '', attributeIds: block }
+  const problem = referenceProblem(doc, from, to)
+  return problem ? { problem } : { from, to }
+}
+
+/** Creating the reference for a click on a cell (needs a fresh ID, so it is resolved here, not in the reducer). */
+export function referenceAction(state: AppState, attributeId: Id): Action | null {
+  const intent = referenceIntent(state, attributeId)
+  if (!intent) return null
+  if ('problem' in intent) return { type: 'ui', patch: { message: { kind: 'error', text: intent.problem } } }
+  const command = addReference(intent.from, intent.to)
+  if (command.type !== 'addReference') return null
+  return {
+    type: 'command',
+    command,
+    after: { operation: SELECT, selection: { kind: 'reference', referenceId: command.reference.id } },
+  }
+}
+
+/** `additive`: a Shift-click, which adds to or removes from the selection like the "Add to selection" mode. */
+export function resolveCanvasClick(state: AppState, target: CanvasTarget, point: Point, additive = false): Action | null {
   const { ui } = state
   const op = ui.operation
 
@@ -115,17 +158,22 @@ export function resolveCanvasClick(state: AppState, target: CanvasTarget, point:
     }
   }
 
-  if (op.kind === 'reference') {
-    // Only cells count, so a stray click on a header or empty canvas loses nothing.
-    return target.kind === 'attribute' ? { type: 'pickReferenceAttribute', attributeId: target.attributeId } : null
+  if (op.kind === 'copyTable') {
+    // Any click places the copy, as Move table does: all attributes (with their notation), no name, no references.
+    const r = state.doc.relations.find((x) => x.id === op.relationId)
+    if (!r) return null
+    const destination = toDestination({ kind: 'newTable', position: newTablePosition(point) })
+    const copy = copyAttributes(state.doc, r.attributes.map((a) => a.id), destination)
+    if (!copy) return null
+    return { type: 'command', command: copy.command, after: { operation: SELECT, selection: { kind: 'relation', relationId: destination.relationId } } }
   }
 
-  if (op.kind === 'move' || op.kind === 'copy') {
-    if (op.phase === 'destination') return transferAction(state, op.kind, selectedAttributeIds(ui), target, point)
-    // Selecting: plain clicks add or remove cells. Anything else does nothing, so a stray click loses nothing.
-    if (target.kind === 'attribute') return { type: 'toggleAttribute', attributeId: target.attributeId }
-    return null
+  if (op.kind === 'reference') {
+    // Only cells count, so a stray click on a header or empty canvas loses nothing.
+    return target.kind === 'attribute' ? referenceAction(state, target.attributeId) : null
   }
+
+  if (op.kind === 'move' || op.kind === 'copy') return transferAction(state, op.kind, selectedAttributeIds(ui), target, point)
 
   // Normal selection state.
   switch (target.kind) {
@@ -148,8 +196,15 @@ export function resolveCanvasClick(state: AppState, target: CanvasTarget, point:
       }
     }
     case 'attribute': {
-      if (ui.multiSelect) return { type: 'ui', patch: { selection: toggled(ui.selection, target.attributeId), message: null } }
       const ids = selectedAttributeIds(ui)
+      // Adding works within the selected table; a cell in another table starts a new selection there.
+      const sameTable = ids.length > 0 && commonRelation(state.doc, [...ids, target.attributeId]) !== null
+      if ((ui.multiSelect || additive) && sameTable) {
+        const next = ids.includes(target.attributeId) ? ids.filter((id) => id !== target.attributeId) : [...ids, target.attributeId]
+        return { type: 'ui', patch: { selection: next.length ? { kind: 'attributes', attributeIds: next } : NO_SELECTION, message: null } }
+      }
+      if (!sameTable && ids.length > 0)
+        return { type: 'ui', patch: { selection: { kind: 'attributes', attributeIds: [target.attributeId] }, multiSelect: false, message: null } }
       const again = ids.length === 1 && ids[0] === target.attributeId
       return {
         type: 'ui',
@@ -172,44 +227,11 @@ export function resolveCanvasClick(state: AppState, target: CanvasTarget, point:
 export function choosingDestination(state: AppState): 'place' | 'move' | 'copy' | null {
   const op = state.ui.operation
   if (op.kind === 'place') return state.ui.selectedFieldIds.length > 0 ? 'place' : null
-  if ((op.kind === 'move' || op.kind === 'copy') && op.phase === 'destination') return op.kind
+  if (op.kind === 'move' || op.kind === 'copy') return op.kind
   return null
 }
 
 const n = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`
-
-/**
- * What Next / Finish (and Enter) does in the active operation, or null if it has no next step.
- * Finishing a reference needs a fresh ID, so it is resolved here rather than in the reducer.
- */
-export function nextStepAction(state: AppState): Action | null {
-  const op = state.ui.operation
-  if ((op.kind === 'move' || op.kind === 'copy') && op.phase === 'selecting') return { type: 'next' }
-  if (op.kind !== 'reference') return null
-  if (op.phase === 'source') return { type: 'next' }
-  const fromTable = commonRelation(state.doc, op.source)
-  const toTable = commonRelation(state.doc, op.target)
-  const from: ReferenceEnd = { relationId: fromTable ?? '', attributeIds: op.source }
-  const to: ReferenceEnd = { relationId: toTable ?? '', attributeIds: op.target }
-  const problem =
-    op.target.length > 0 && op.target.length < op.source.length
-      ? `Select ${n(op.source.length, 'referenced attribute')} (${op.target.length} selected).`
-      : referenceProblem(state.doc, from, to)
-  if (problem) return { type: 'ui', patch: { message: { kind: 'error', text: problem } } }
-  const command = addReference(from, to)
-  if (command.type !== 'addReference') return null
-  return {
-    type: 'command',
-    command,
-    after: { operation: SELECT, selection: { kind: 'reference', referenceId: command.reference.id } },
-  }
-}
-
-/** Whether Finish can complete the reference now (for enabling the button). */
-export function referenceReady(state: AppState): boolean {
-  const op = state.ui.operation
-  return op.kind === 'reference' && op.phase === 'target' && op.target.length > 0 && op.target.length === op.source.length
-}
 
 function tableName(doc: KrijtDocument, relationId: Id): string {
   const r = doc.relations.find((x) => x.id === relationId)
@@ -230,37 +252,23 @@ export function describeReference(doc: KrijtDocument, ref: Reference): { from: s
   }
 }
 
-/** The one-line instruction shown while an operation is active. */
-export function operationInstruction(state: AppState): string | null {
+/**
+ * A short announcement of the active operation for screen readers. Sighted users see the pressed button and the
+ * canvas previews instead.
+ */
+export function operationAnnouncement(state: AppState): string | null {
   const op = state.ui.operation
   if (op.kind === 'place') {
     const count = state.ui.selectedFieldIds.length
-    if (count === 0) return 'Select form fields in the sidebar, then click a table to add them or empty canvas for a new table.'
-    return `Click a table to add ${count === 1 ? 'the field' : `${count} fields`}, or click empty canvas to create a new table.`
+    if (count === 0) return 'Place in diagram: select form fields first.'
+    return `Place ${n(count, 'field')}: choose a table, or empty canvas for a new table.`
   }
-  if (op.kind === 'moveTable') return 'Click on the canvas where the table should go.'
-  if (op.kind === 'reference') {
-    if (op.phase === 'source') {
-      if (op.source.length === 0) return 'Click the foreign-key attribute (or several side by side) that refers to another attribute, then choose Next.'
-      const table = commonRelation(state.doc, op.source)
-      const where = table ? ` in ${tableName(state.doc, table)}` : ''
-      return `Foreign key: ${n(op.source.length, 'attribute')}${where}. Click more to add or remove, then choose Next.`
-    }
-    const need = op.source.length
-    if (need === 1)
-      return op.target.length === 0 ? 'Click the attribute the foreign key refers to, then choose Finish.' : 'Choose Finish, or click the selected cell to undo the choice.'
-    return op.target.length < need
-      ? `Click the ${need} side-by-side attributes it refers to (they pair up left to right): ${op.target.length} of ${need} chosen.`
-      : `All ${need} chosen. Choose Finish, or click a selected cell to remove it.`
-  }
+  if (op.kind === 'moveTable') return 'Move table: choose where it should go.'
+  if (op.kind === 'copyTable') return 'Copy table: choose where the copy should go.'
+  if (op.kind === 'reference') return `Reference from ${n(op.source.length, 'attribute')}: choose the referenced ${op.source.length === 1 ? 'attribute' : 'attributes'}.`
   if (op.kind === 'move' || op.kind === 'copy') {
-    const count = selectedAttributeIds(state.ui).length
-    const verb = op.kind === 'move' ? 'move' : 'copy'
-    if (op.phase === 'selecting')
-      return count === 0
-        ? `Click the attributes to ${verb}, then choose Next.`
-        : `${n(count, 'attribute')} selected. Click more to add or remove, then choose Next.`
-    return `Click a table or a cell edge to ${verb} ${count === 1 ? 'the attribute' : `${count} attributes`} there, or click empty canvas for a new table.`
+    const verb = op.kind === 'move' ? 'Move' : 'Copy'
+    return `${verb} ${n(selectedAttributeIds(state.ui).length, 'attribute')}: choose a destination.`
   }
   return null
 }

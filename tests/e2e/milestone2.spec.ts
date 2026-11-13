@@ -7,12 +7,19 @@ const canvas = (page: Page) => page.locator('.canvas-svg')
 const relations = (page: Page) => page.locator('.relation')
 const cellIn = (rel: Locator, name: string) => rel.locator(`.cell[aria-label^="Attribute ${name} in"]`)
 const anyCell = (page: Page, name: string) => page.locator(`.cell[aria-label^="Attribute ${name} in"]`)
-/** Clicks empty canvas near the top-right corner, away from tables and the zoom controls. */
+/** Clicks empty canvas near the top-right corner, away from tables. */
 async function clickEmpty(page: Page) {
   const box = (await canvas(page).boundingBox())!
   await canvas(page).click({ position: { x: box.width - 40, y: 30 } })
 }
-const tool = (page: Page, name: string) => page.getByRole('group', { name: 'Tools' }).getByRole('button', { name, exact: true })
+const toolbar = (page: Page) => page.getByRole('toolbar', { name: 'Selection actions' })
+const action = (page: Page, name: string) => toolbar(page).getByRole('button', { name, exact: true })
+/** Selects cells of one table by plain clicks: the first, then "Add to selection" and the rest. */
+async function selectCells(page: Page, cells: Locator[]) {
+  await cells[0]!.click()
+  if (cells.length > 1) await action(page, 'Add to selection').click()
+  for (const c of cells.slice(1)) await c.click()
+}
 
 /** Attribute names per table, in document order. */
 async function tables(page: Page): Promise<string[][]> {
@@ -47,25 +54,23 @@ test('acceptance: split a 10-attribute table into three, copy one back, undo and
   expect(await tables(page)).toEqual([TEN])
   const states: string[][][] = [await tables(page)]
 
-  // Move 1: command first, then click attributes, Next, empty canvas.
-  await tool(page, 'Move').click()
-  for (const n of ['Klantnr', 'Naam', 'Adres', 'Plaats']) await anyCell(page, n).click()
-  await expect(page.getByText('4 attributes selected.')).toBeVisible()
-  await page.getByRole('button', { name: /Next: choose destination/ }).click()
+  // Move 1: select the attributes, "Move", click empty canvas.
+  await selectCells(page, ['Klantnr', 'Naam', 'Adres', 'Plaats'].map((n) => anyCell(page, n)))
+  await action(page, 'Move').click()
+  await expect(action(page, 'Move')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.diagram-header [aria-live]')).toHaveText('Move 4 attributes: choose a destination.')
   await canvas(page).click({ position: { x: 60, y: 200 } })
   states.push(await tables(page))
   expect(states[1]).toEqual([
     ['Ordernr', 'Datum', 'Artikelnr', 'Omschrijving', 'Aantal', 'Prijs'],
     ['Klantnr', 'Naam', 'Adres', 'Plaats'],
   ])
-  await expect(tool(page, 'Select')).toHaveAttribute('aria-pressed', 'true') // one-shot: back to Select
+  await expect(action(page, 'Move')).toHaveAttribute('aria-pressed', 'false') // one-shot: back to selecting
 
-  // Move 2: selection first with Select several, then "Move to…", which goes straight to step 2.
+  // Move 2.
   await clickEmpty(page)
-  await tool(page, 'Select several').click()
-  for (const n of ['Artikelnr', 'Omschrijving', 'Prijs']) await anyCell(page, n).click()
-  await page.getByRole('button', { name: 'Move to…' }).click()
-  await expect(page.getByText('Click a table or a cell edge to move 3 attributes there, or click empty canvas for a new table.')).toBeVisible()
+  await selectCells(page, ['Artikelnr', 'Omschrijving', 'Prijs'].map((n) => anyCell(page, n)))
+  await action(page, 'Move').click()
   await canvas(page).click({ position: { x: 60, y: 320 } })
   states.push(await tables(page))
   expect(states[2]).toEqual([
@@ -75,11 +80,8 @@ test('acceptance: split a 10-attribute table into three, copy one back, undo and
   ])
 
   // Copy Klantnr back into the first table, by clicking that table's header.
-  // The Copy tool starts empty, even though the moved attributes are still selected.
-  await tool(page, 'Copy').click()
-  await expect(page.getByText('Click the attributes to copy, then choose Next.')).toBeVisible()
   await anyCell(page, 'Klantnr').click()
-  await page.getByRole('button', { name: /Next: choose destination/ }).click()
+  await action(page, 'Copy').click()
   await relations(page).nth(0).locator('.relation-header').click()
   states.push(await tables(page))
   expect(states[3]![0]).toEqual(['Ordernr', 'Datum', 'Aantal', 'Klantnr'])
@@ -104,14 +106,11 @@ test('notation: primary key bold and underlined, nullable superscript o, calcula
   const rel = relations(page).nth(0)
 
   // Composite key: two primary-key attributes.
-  await tool(page, 'Select several').click()
-  await cellIn(rel, 'Ordernr').click()
-  await cellIn(rel, 'Regelnr').click()
+  await selectCells(page, [cellIn(rel, 'Ordernr'), cellIn(rel, 'Regelnr')])
   await page.getByRole('button', { name: 'Primary key' }).click()
   await expect(page.getByRole('button', { name: 'Primary key' })).toHaveAttribute('aria-pressed', 'true')
 
   await clickEmpty(page)
-  await tool(page, 'Select').click()
   await cellIn(rel, 'Korting').click()
   await page.getByRole('button', { name: 'Nullable' }).click()
   await cellIn(rel, 'Subtotaal').click()
@@ -131,9 +130,8 @@ test('notation: primary key bold and underlined, nullable superscript o, calcula
   // Calculated + nullable: name, then /, then superscript o.
   await expect(cellIn(rel, 'Subtotaal').locator('tspan')).toHaveText(['Subtotaal', '/', 'o'])
 
-  // Mixed selection shows a mixed state; the toggle then sets the flag on all.
-  await tool(page, 'Select several').click()
-  await cellIn(rel, 'Ordernr').click()
+  // Mixed selection shows a mixed state; the toggle then sets the flag on all. Shift-click adds too.
+  await cellIn(rel, 'Ordernr').click({ modifiers: ['Shift'] })
   await expect(page.getByRole('button', { name: 'Primary key' })).toHaveAttribute('aria-pressed', 'mixed')
 })
 
@@ -166,9 +164,8 @@ test('rename, reorder and delete attributes, with dependent deletions explained'
   await page.getByRole('button', { name: 'Delete' }).click()
   expect(await tables(page)).toEqual([['Bedrag', 'c']])
   await expect(page.getByRole('status').filter({ hasText: 'Deleted 1 attribute.' })).toBeVisible()
-  await tool(page, 'Select several').click()
-  await cellIn(rel, 'Bedrag').click()
-  await cellIn(rel, 'c').click()
+  await selectCells(page, [cellIn(rel, 'Bedrag'), cellIn(rel, 'c')])
+  await cellIn(rel, 'c').focus()
   await page.keyboard.press('Delete')
   await expect(relations(page)).toHaveCount(0)
   await expect(page.getByRole('status').filter({ hasText: 'Deleted 2 attributes. 1 empty table removed.' })).toBeVisible()
@@ -179,9 +176,8 @@ test('rename, reorder and delete attributes, with dependent deletions explained'
 test('a cell edge chooses where moved attributes are inserted, with a preview', async ({ page }) => {
   await setup(page, ['a', 'b', 'c', 'd'])
   const rel = relations(page).nth(0)
-  await tool(page, 'Move').click()
   await cellIn(rel, 'd').click()
-  await page.keyboard.press('Enter')
+  await action(page, 'Move').click()
   const b = (await cellIn(rel, 'b').boundingBox())!
   await page.mouse.move(b.x + 4, b.y + b.height / 2)
   await expect(page.locator('.preview-bar')).toHaveCount(1)
@@ -190,13 +186,17 @@ test('a cell edge chooses where moved attributes are inserted, with a preview', 
   await expect(page.locator('.preview-bar')).toHaveCount(0)
 })
 
-test('Escape cancels Move and Copy at any step without changing the diagram', async ({ page }) => {
+test('Escape, or the pressed button, cancels Move and Copy without changing the diagram', async ({ page }) => {
   await setup(page, ['a', 'b'])
   for (const t of ['Move', 'Copy']) {
-    await tool(page, t).click()
     await anyCell(page, 'a').click()
-    await page.keyboard.press('Enter')
+    await action(page, t).click()
+    await expect(action(page, 'Delete')).toBeDisabled() // other actions wait
     await page.keyboard.press('Escape')
+    await expect(action(page, t)).toHaveAttribute('aria-pressed', 'false')
+    await action(page, t).click()
+    await action(page, t).click() // pressing it again cancels too
+    await expect(action(page, t)).toHaveAttribute('aria-pressed', 'false')
     await clickEmpty(page)
     expect(await tables(page)).toEqual([['a', 'b']])
     await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled() // only the earlier placement
@@ -252,11 +252,11 @@ test('selecting things or starting an operation never moves the canvas', async (
   const steps = [
     () => anyCell(page, 'b').click(),
     () => relations(page).nth(0).locator('.relation-header').click(),
-    () => tool(page, 'Move').click(),
-    () => page.keyboard.press('Escape'),
-    () => tool(page, 'Select several').click(),
-    () => anyCell(page, 'c').click(),
     () => anyCell(page, 'b').click(),
+    () => action(page, 'Move').click(),
+    () => page.keyboard.press('Escape'),
+    () => action(page, 'Add to selection').click(),
+    () => anyCell(page, 'c').click(),
     () => page.getByRole('button', { name: 'Delete' }).click(), // shows a notice
   ]
   for (const step of steps) {

@@ -1,4 +1,4 @@
-/** Milestone 4: export scene, clipboard results and errors, JSON serialization, New diagram, recovery status. */
+/** Milestone 4: export scene, clipboard results and errors, JSON serialization, Clear diagram, recovery status. */
 import { describe, expect, it } from 'vitest'
 import { applyCommand } from '../../src/commands/commands'
 import { copyImage, copyText, failureMessage, type ClipboardEnv } from '../../src/clipboard/clipboard'
@@ -280,7 +280,7 @@ describe('copy data', () => {
   })
 })
 
-describe('New diagram', () => {
+describe('Clear diagram', () => {
   it('clears tables and references, keeping or clearing the form fields, in one undoable step', () => {
     let s = initialState(sample())
     s = reducer(s, { type: 'command', command: { type: 'clearDocument', keepFields: true } })

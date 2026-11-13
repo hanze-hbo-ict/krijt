@@ -122,12 +122,12 @@ Maintain viewport zoom/pan and active operation/selection as **UI state**, separ
 
 ### Desktop shell
 
-- Compact header: **Krijt**, untitled exercise label if desired, undo/redo, clipboard actions, help.
-- Persistent, resizable left sidebar (e.g. initial width 260–320px) titled **Form fields / Formuliervelden**. Keep inventory editing compact.
+- Compact header: **Krijt**, untitled exercise label if desired, help. *(Revised: undo/redo, zoom and clipboard actions moved into the diagram panel's header, titled **Diagram**, in the style of Kopje's panel headers.)*
+- Persistent, resizable left sidebar (e.g. initial width 260–320px) titled **Form fields**. Keep inventory editing compact. *(Revised: no Dutch subtitles on panel headers.)*
 - Main work area: large, pannable, zoomable canvas with whitespace; optional subtle grid. Table strips should be legible at normal zoom.
-- Compact tool strip: **Select**, **Move**, **Copy**, **Reference**. Active mode must be obvious.
-- Context toolbar for selected attributes: rename, primary key, nullable, calculated, delete, move, copy, reference. Keep primary operations discoverable without relying on right-click.
-- Clear operation instruction and **Cancel** control during multi-step actions; keyboard Escape also cancels.
+- ~~Compact tool strip~~ *(Revised: no tool strip. Every operation starts from the selection, so Select/Move/Copy/Reference tools were redundant; multi-selection is an **Add to selection** toggle in the context toolbar.)*
+- Context toolbar, floating next to the selection (icon-only, with tooltips): rename, primary key, nullable, calculated, reorder, move to, copy to, reference from, delete; for tables: name, add attribute, move, copy, delete; for references: delete, beside the line. Keep primary operations discoverable without relying on right-click.
+- During an operation its toolbar button stays pressed; pressing it again cancels, as Escape does. *(Revised: no instruction bar; hover/focus previews on the canvas show what a click will do, and a hidden live region announces the operation for screen readers.)*
 - No heavy property-inspector panel, modal-driven table builder, floating AI/help agent, or excessive chrome.
 
 ### Tables
@@ -166,15 +166,14 @@ The application has one **normal selection state** and three **one-shot operatio
 ### 4.2 Default selection state
 
 - Click cell to select; click selected cell again or use a visible control to toggle where useful.
-- Provide multi-selection **by ordinary successive clicks** while an explicit multi-select/operation is active. Do not require Ctrl/Shift for essential multi-selection.
+- Provide multi-selection **by ordinary successive clicks** while an explicit multi-select/operation is active. Do not require Ctrl/Shift for essential multi-selection. *(Revised: the **Add to selection** toggle; Shift-click as an optional shortcut. A selection lies within one table; the mode ends when the selection is empty.)*
 - Double-click or press Enter on selected attribute to rename; avoid having single-click both select and edit.
 - Click empty canvas in normal state clears selection (does not create a table).
 - Click an unnamed table's name affordance to optionally name it; names can be cleared.
 
 ### 4.3 Move
 
-- Activate **Move** with existing attribute selection, or activate Move and then select attributes with clicks. Show selected count.
-- Student may select attributes from one or several tables. An explicit **Next / Choose destination** button advances the operation; keyboard Enter is the shortcut.
+- Activate **Move** on an existing attribute selection (from one table); the next click chooses the destination. *(Revised: no separate selection step with Next.)*
 - Click existing table to append; click an insertion gap/cell-edge target to choose insertion index; click empty canvas to create an unnamed table at that point.
 - **Move is the default for dragging an attribute out of a table.** Source table loses moved attributes; destination gets the *same attribute IDs* where possible, preserving semantics.
 - Keep selected attributes in deterministic order: table visual/document order, then attribute order (for cross-table selections). Preserve order within single-table selection.
@@ -191,9 +190,8 @@ The application has one **normal selection state** and three **one-shot operatio
 
 ### 4.5 Reference
 
-- Activate **Reference** with no selection or with preselected source attributes.
-- Explicitly select the referencing/foreign-key attributes using ordinary clicks; use visible **Next** (Enter) to finish source selection.
-- Explicitly select referenced/target attributes, preserving selection order; use **Finish** (Enter) to create connector.
+- Select the referencing/foreign-key attributes (side by side) with ordinary clicks, then **Reference**.
+- One click on a cell picks the referenced attributes: as many side-by-side cells as the foreign key has, starting at the clicked cell (shifted left to fit the table). Hovering previews the block with pairing numbers and the connector. *(Revised: replaces Next/Finish and per-cell target picking; ends pair left to right in table order.)*
 - Source and target must each belong to one relation for v1; the counts must match. The editor may highlight why an impossible selection cannot complete, but must not check schema correctness.
 - For one attribute on each side, draw one arrow. For multiple, draw **a curly-braced group at each end** with one directional arrow between the groups.
 - Direction is always foreign-key group → referenced group. Use arrows and feedback to make this unambiguous.
@@ -337,7 +335,7 @@ Each milestone should produce a runnable build, relevant tests, and a short manu
 
 ### Milestone 3 — References and geometry
 
-- Source/target selection stages with Next/Finish and Escape.
+- Source/target selection with Escape. *(Revised: Reference on the selection, then one click on the referenced block.)*
 - Single reference connectors and composite curly-brace endpoints.
 - Reference selection/deletion; references update when cells or tables move.
 - Orthogonal geometry and proper export bounds; sensible errors for impossible structural operations.

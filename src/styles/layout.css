@@ -226,13 +226,6 @@ textarea:focus-visible {
   align-items: center;
   gap: 10px;
 }
-.copy-actions {
-  display: flex;
-  gap: 6px;
-  padding-right: 10px;
-  margin-right: 2px;
-  border-right: 1px solid var(--line);
-}
 .save-warning {
   color: var(--error);
   font-size: var(--text-s);
@@ -259,17 +252,14 @@ textarea:focus-visible {
   justify-content: space-between;
   align-items: center;
   gap: var(--space-2);
-  padding: 10px 12px 10px 16px;
+  min-height: 56px;
+  flex: none;
+  padding: 8px 12px 8px 16px;
 }
 .panel-header h2 {
   margin: 0;
   font-size: var(--text-base);
   font-weight: 600;
-}
-.panel-subtitle {
-  margin: 1px 0 0;
-  color: var(--muted);
-  font-size: var(--text-s);
 }
 
 .splitter {
@@ -411,38 +401,42 @@ textarea:focus-visible {
 }
 
 /* ---- Diagram panel -------------------------------------------------------- */
-/* Fixed height, one row: selecting something never moves the canvas. Too narrow → it scrolls sideways. */
-.context-bar {
+/* Title and icon actions, lined up with the sidebar's header. */
+.diagram-header {
+  gap: 12px;
+}
+.diagram-actions {
   display: flex;
   align-items: center;
-  height: 52px;
-  flex: none;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--line);
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-  container-type: inline-size;
+  gap: 4px;
+  min-width: 0;
 }
-/* Long selection bars: drop secondary button texts first (icons, names and tooltips remain), then samples. */
-@container (max-width: 1180px) {
-  .collapsible:not(.narrow) {
-    display: none;
-  }
+.header-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
-@container (max-width: 860px) {
-  .collapsible.narrow,
-  .context-bar .notation-sample {
-    display: none;
-  }
+.header-separator {
+  width: 1px;
+  height: 22px;
+  margin: 0 4px;
+  background: var(--line);
 }
-.context-bar:not([data-operation='select']) {
-  background: var(--soft);
+.panel-header .icon-button {
+  width: 34px;
+  height: 34px;
 }
-.diagram-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
+.panel-header .icon-button .icon {
+  width: 18px;
+  height: 18px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .canvas-area {
   position: relative;
@@ -450,135 +444,10 @@ textarea:focus-visible {
   min-width: 0;
   display: flex;
 }
-.tool-strip {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 6px;
-  border-right: 1px solid var(--line);
-  width: 82px;
-  flex: none;
-}
-.tool {
-  flex-direction: column;
-  gap: 3px;
-  border: 1px solid transparent;
-  background: transparent;
-  border-radius: var(--radius-m);
-  padding: 7px 4px 6px;
-  color: var(--muted);
-  font-size: var(--text-s);
-  white-space: normal;
-  text-align: center;
-  line-height: 1.2;
-}
-.tool .icon {
-  width: 18px;
-  height: 18px;
-}
-/* The active tool: filled and outlined, so it does not rely on colour alone. */
-.tool[aria-pressed='true'] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--panel);
-}
-.tool[aria-pressed='true']:hover:enabled {
-  background: var(--accent-hover);
-}
-.bar-content {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: max-content;
-}
-.bar-content.operation {
-  min-width: 0;
-}
-.bar-group {
-  display: inline-flex;
-  gap: 4px;
-}
-.icon-text {
-  padding: 7px 8px;
-}
-.flag-button {
-  font-weight: 500;
-}
-.flag-button[aria-pressed='true'],
-.flag-button[aria-pressed='mixed'] {
-  border-color: var(--accent);
-  background: var(--soft);
-  font-weight: 650;
-}
-.flag-check {
-  width: 14px;
-  height: 14px;
-  border: 1.5px solid var(--line-strong);
-  border-radius: 3px;
-  display: grid;
-  place-items: center;
-}
-.flag-button[aria-pressed='true'] .flag-check,
-.flag-button[aria-pressed='mixed'] .flag-check {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--panel);
-}
-.flag-check .icon {
-  width: 11px;
-  height: 11px;
-  stroke-width: 2.6px;
-}
 .notation-pk {
   font-weight: 750;
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-.notation-sample {
-  font-family: var(--font-sans);
-  color: var(--muted);
-  font-weight: 500;
-}
-.op-badge {
-  background: var(--accent);
-  color: var(--panel);
-  border-radius: var(--radius-s);
-  padding: 3px 8px;
-  font-weight: 700;
-  font-size: var(--text-s);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  white-space: nowrap;
-}
-.op-step {
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 500;
-}
-.instruction {
-  font-weight: 500;
-  min-width: 220px;
-  flex: 1 1 auto;
-  line-height: 1.3;
-  /* At most two lines, which fit the fixed bar height. */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.bar-content.operation > button {
-  flex: none;
-}
-.cancel-button {
-  margin-left: auto;
-}
-.selection-label {
-  margin-right: 6px;
-}
-.hint {
-  color: var(--muted);
 }
 .message-slot {
   position: absolute;
@@ -612,18 +481,6 @@ textarea:focus-visible {
 .bar-message.info {
   color: var(--ink);
   background: var(--warn-bg);
-}
-.history-actions {
-  display: inline-flex;
-  gap: 2px;
-}
-.header-icon {
-  width: 34px;
-  height: 34px;
-}
-.header-icon .icon {
-  width: 18px;
-  height: 18px;
 }
 
 .canvas {
@@ -892,14 +749,8 @@ textarea:focus-visible {
 .cell[data-ref-role='target'] .cell-ref-badge circle {
   fill: #0f766e;
 }
-.reference-label {
-  max-width: 60ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-/* Destination previews: an insertion bar, or the outline of a new table. */
+/* Previews: an insertion bar, the outline of a new or moved table, a reference to be created. */
 .preview {
   pointer-events: none;
 }
@@ -917,6 +768,9 @@ textarea:focus-visible {
   stroke: var(--accent);
   stroke-width: 1.5;
   stroke-dasharray: 5 3;
+}
+.preview-reference {
+  opacity: 0.55;
 }
 .preview-label {
   fill: var(--accent);
@@ -950,10 +804,10 @@ textarea:focus-visible {
   z-index: 5;
 }
 
-.zoom-controls {
+/* Context toolbar: icon-only actions floating next to the selection. Placed by SelectionToolbar. */
+.selection-toolbar {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -961,15 +815,62 @@ textarea:focus-visible {
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
   padding: 3px;
-  box-shadow: 0 2px 8px #00000014;
+  box-shadow: 0 2px 10px #0000001f;
+  white-space: nowrap;
 }
-.zoom-level {
-  border: 0;
+.toolbar-group {
+  display: inline-flex;
+  gap: 2px;
+}
+.toolbar-separator {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 3px;
+  background: var(--line);
+}
+.toolbar-button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-color: transparent;
   background: transparent;
-  font-variant-numeric: tabular-nums;
-  min-width: 52px;
-  justify-content: center;
-  padding: 6px;
+  border-radius: var(--radius-s);
+}
+.toolbar-button:not(.danger-quiet) {
+  color: var(--ink);
+}
+.toolbar-button[aria-pressed='true'],
+.toolbar-button[aria-pressed='mixed'] {
+  background: var(--soft);
+  border-color: var(--accent);
+}
+.toolbar-button[aria-pressed='mixed'] .glyph {
+  opacity: 0.6;
+}
+.glyph {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+}
+.glyph sup {
+  font-size: 10px;
+}
+.glyph.notation-pk {
+  font-weight: 750;
+}
+/* Tooltips point away from the selection. */
+.selection-toolbar[data-place='above'] [data-tooltip]::after {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+/* An operation it started is running: its pressed button is the way to cancel. */
+.toolbar-button.operation[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--panel);
 }
 
 /* ---- Help ----------------------------------------------------------------- */

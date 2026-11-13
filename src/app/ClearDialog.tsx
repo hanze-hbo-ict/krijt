@@ -1,4 +1,4 @@
-/** Confirmation for "New diagram". Clearing is one undo step, but undo history does not survive a reload. */
+/** Confirmation for "Clear diagram". Clearing is one undo step, but undo history does not survive a reload. */
 import { useEffect, useRef } from 'react'
 import { Icon } from '../components/Icon'
 
@@ -21,7 +21,7 @@ export function ClearDialog({ hasFields, onClear, onClose }: Props) {
   return (
     <dialog ref={ref} className="help-dialog confirm-dialog" aria-labelledby="clear-title" aria-describedby="clear-text" onClose={onClose} onCancel={onClose}>
       <div className="dialog-header">
-        <h2 id="clear-title">Start a new diagram?</h2>
+        <h2 id="clear-title">Clear the diagram?</h2>
         <button type="button" className="icon-button" aria-label="Close" onClick={() => ref.current?.close()}>
           <Icon name="close" />
         </button>

@@ -7,7 +7,15 @@ const canvas = (page: Page) => page.locator('.canvas-svg')
 const relations = (page: Page) => page.locator('.relation')
 const table = (page: Page, i: number) => relations(page).nth(i)
 const cellIn = (rel: Locator, name: string) => rel.locator(`.cell[aria-label^="Attribute ${name} in"]`)
-const tool = (page: Page, name: string) => page.getByRole('group', { name: 'Tools' }).getByRole('button', { name, exact: true })
+const action = (page: Page, name: string) =>
+  page.getByRole('toolbar', { name: 'Selection actions' }).getByRole('button', { name, exact: true })
+/** Selects the foreign-key cells (one table) by clicks, then "Reference". */
+async function referenceFrom(page: Page, cells: Locator[]) {
+  await cells[0]!.click()
+  if (cells.length > 1) await action(page, 'Add to selection').click()
+  for (const c of cells.slice(1)) await c.click()
+  await action(page, 'Reference').click()
+}
 const references = (page: Page) => page.locator('.reference')
 
 async function clickEmpty(page: Page) {
@@ -108,32 +116,23 @@ test('acceptance: a simple and a composite foreign key stay attached after movin
   await setup(page)
   const [order, klant, regel, levering] = [0, 1, 2, 3].map((i) => table(page, i)) as [Locator, Locator, Locator, Locator]
 
-  // Simple reference with the tool: foreign key, Next, referenced attribute, Finish.
-  await tool(page, 'Reference').click()
-  await expect(page.getByText('step 1 of 2: foreign key')).toBeVisible()
-  await cellIn(order, 'klantnr').click()
-  await page.getByRole('button', { name: /Next: referenced attributes/ }).click()
-  await expect(page.getByText('step 2 of 2: referenced')).toBeVisible()
-  await expect(page.getByRole('button', { name: /Finish/ })).toBeDisabled()
+  // Simple reference: select the foreign key, "Reference", click the referenced attribute.
+  await referenceFrom(page, [cellIn(order, 'klantnr')])
+  await expect(action(page, 'Reference')).toHaveAttribute('aria-pressed', 'true')
   await cellIn(klant, 'klantnr').click()
-  await page.getByRole('button', { name: /Finish/ }).click()
   await expect(references(page)).toHaveCount(1)
-  await expect(tool(page, 'Select')).toHaveAttribute('aria-pressed', 'true')
   await expect(references(page).first()).toHaveAttribute('aria-label', 'Reference from unnamed table (klantnr) to unnamed table (klantnr)')
   await expect(page.getByRole('button', { name: 'Delete reference' })).toBeVisible() // the new reference is selected
 
-  // Composite reference from the selection: Select several, "Reference from…", two targets in order, Enter.
+  // Composite reference: hovering a cell previews the block of two it would pick, with numbers and a connector.
   await clickEmpty(page)
-  await tool(page, 'Select several').click()
-  await cellIn(levering, 'ordernr').click()
-  await cellIn(levering, 'regelnr').click()
-  await page.getByRole('button', { name: 'Reference from…' }).click()
-  await expect(page.getByText('Click the 2 side-by-side attributes it refers to (they pair up left to right): 0 of 2 chosen.')).toBeVisible()
-  await cellIn(regel, 'ordernr').click()
-  await cellIn(regel, 'regelnr').click()
+  await referenceFrom(page, [cellIn(levering, 'ordernr'), cellIn(levering, 'regelnr')])
+  await cellIn(regel, 'ordernr').hover()
   await expect(cellIn(regel, 'regelnr')).toHaveAttribute('aria-description', 'referenced 2')
-  await page.keyboard.press('Enter')
+  await expect(page.locator('.preview-reference')).toHaveCount(1)
+  await cellIn(regel, 'ordernr').click()
   await expect(references(page)).toHaveCount(2)
+  await expect(page.locator('.preview-reference')).toHaveCount(0)
 
   const ids = await relations(page).evaluateAll((rs) => rs.map((r) => r.getAttribute('data-relation-id')!))
   const expected = [
@@ -142,12 +141,13 @@ test('acceptance: a simple and a composite foreign key stay attached after movin
   ]
   expect(await attachments(page)).toEqual(expected)
 
-  // Move Klant and Regel with "Move table" and a click.
+  // Move Klant and Regel with "Move table" and a click; an outline shows where.
   await clickEmpty(page)
-  await tool(page, 'Select').click()
   // Click the grip at the header's left end: a connector may cross the middle of a header, and wins there.
   await klant.locator('.relation-header').click({ position: { x: 8, y: 12 } })
   await page.getByRole('button', { name: 'Move table' }).click()
+  await canvas(page).hover({ position: { x: 480, y: 330 } })
+  await expect(page.locator('.preview-table')).toHaveCount(2) // header band and strip
   await canvas(page).click({ position: { x: 480, y: 330 } })
   await regel.locator('.relation-header').click({ position: { x: 8, y: 12 } })
   await page.getByRole('button', { name: 'Move table' }).click()
@@ -174,11 +174,8 @@ test('acceptance: a simple and a composite foreign key stay attached after movin
 
 test('a connector is selected by clicking it, and deleted with the button or Delete, undoably', async ({ page }) => {
   await setup(page)
-  await tool(page, 'Reference').click()
-  await cellIn(table(page, 0), 'klantnr').click()
-  await page.keyboard.press('Enter')
+  await referenceFrom(page, [cellIn(table(page, 0), 'klantnr')])
   await cellIn(table(page, 1), 'klantnr').click()
-  await page.keyboard.press('Enter')
   await clickEmpty(page)
   await expect(page.getByRole('button', { name: 'Delete reference' })).toHaveCount(0)
 
@@ -198,26 +195,19 @@ test('a connector is selected by clicking it, and deleted with the button or Del
   await expect(references(page)).toHaveCount(0)
 })
 
-test('impossible selections are explained, Escape cancels, and deleting an attribute removes its reference', async ({ page }) => {
+test('impossible references are explained, Escape cancels, and deleting an attribute removes its reference', async ({ page }) => {
   await setup(page)
-  await tool(page, 'Reference').click()
+  await referenceFrom(page, [cellIn(table(page, 0), 'klantnr')])
   await cellIn(table(page, 0), 'klantnr').click()
-  await cellIn(table(page, 1), 'naam').click()
-  await expect(page.getByRole('alert')).toContainText('must all be in one table')
-  await page.keyboard.press('Enter')
-  await cellIn(table(page, 0), 'klantnr').click()
-  await expect(page.getByRole('alert')).toContainText('part of the foreign key')
-  await page.keyboard.press('Escape')
-  await page.keyboard.press('Escape')
-  await expect(tool(page, 'Select')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('alert')).toContainText('cannot refer to itself')
+  await page.keyboard.press('Escape') // ends the operation (and its message); the selection stays
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(action(page, 'Reference')).toHaveAttribute('aria-pressed', 'false')
   await expect(references(page)).toHaveCount(0)
 
   // Make one, then delete the referenced attribute: the reference goes with it, and one undo restores both.
-  await tool(page, 'Reference').click()
-  await cellIn(table(page, 0), 'klantnr').click()
-  await page.keyboard.press('Enter')
+  await action(page, 'Reference').click()
   await cellIn(table(page, 1), 'klantnr').click()
-  await page.keyboard.press('Enter')
   await clickEmpty(page)
   await cellIn(table(page, 1), 'klantnr').click()
   await page.keyboard.press('Delete')
@@ -230,13 +220,8 @@ test('impossible selections are explained, Escape cancels, and deleting an attri
 
 test('a composite end moves as a unit, and can be reordered inside with ← →', async ({ page }) => {
   await setup(page)
-  await tool(page, 'Reference').click()
-  await cellIn(table(page, 3), 'regelnr').click()
-  await cellIn(table(page, 3), 'ordernr').click() // click order does not matter
-  await page.keyboard.press('Enter')
+  await referenceFrom(page, [cellIn(table(page, 3), 'regelnr'), cellIn(table(page, 3), 'ordernr')]) // click order does not matter
   await cellIn(table(page, 2), 'ordernr').click()
-  await cellIn(table(page, 2), 'regelnr').click()
-  await page.keyboard.press('Enter')
   await clickEmpty(page)
 
   // ← on levnr jumps over the whole (ordernr, regelnr) block in one press.
@@ -252,6 +237,8 @@ test('a composite end moves as a unit, and can be reordered inside with ← →'
   await cellIn(table(page, 3), 'ordernr').click()
   await page.keyboard.press('ArrowRight')
   expect(await names(3)).toEqual(['levnr', 'regelnr', 'ordernr'])
+  await page.keyboard.press('Escape') // the selection's toolbar floats over the connector
+  await clickEmpty(page)
   await clickConnector(page, 0)
   await expect(cellIn(table(page, 3), 'regelnr')).toHaveAttribute('aria-description', 'foreign key 1')
   await expect(cellIn(table(page, 2), 'ordernr')).toHaveAttribute('aria-description', 'referenced 1')
@@ -259,7 +246,7 @@ test('a composite end moves as a unit, and can be reordered inside with ← →'
 
   // Moving just regelnr brings ordernr along.
   await cellIn(table(page, 3), 'regelnr').click()
-  await page.getByRole('button', { name: 'Move to…' }).click()
+  await action(page, 'Move').click()
   await canvas(page).click({ position: { x: 600, y: 560 } })
   await expect(page.getByRole('status').filter({ hasText: 'Moved ordernr along, to keep the reference together.' })).toBeVisible()
   await expect(relations(page)).toHaveCount(5)

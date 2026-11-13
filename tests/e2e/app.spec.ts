@@ -55,7 +55,8 @@ test('acceptance: paste 12 fields and build an unnamed table from a subset with 
   await expect(field(page, 'Klantnaam')).toHaveAttribute('aria-pressed', 'true')
 
   await page.getByRole('button', { name: 'Place in diagram' }).click()
-  await expect(page.getByText('Click a table to add 3 fields, or click empty canvas to create a new table.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Placing…' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.diagram-header [aria-live]')).toHaveText('Place 3 fields: choose a table, or empty canvas for a new table.')
   await canvas(page).click({ position: { x: 200, y: 160 } })
 
   const cells = page.locator('.cell')
@@ -158,7 +159,7 @@ test('select and deselect an attribute with plain clicks', async ({ page }) => {
   await placeOnCanvas(page, ['P', 'Q'])
   await cell(page, 'Q').click()
   await expect(cell(page, 'Q')).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toContainText('Q in unnamed table')
+  await expect(page.getByRole('toolbar', { name: 'Selection actions' })).toBeVisible()
   await cell(page, 'Q').click()
   await expect(cell(page, 'Q')).toHaveAttribute('aria-pressed', 'false')
 })
@@ -169,7 +170,7 @@ test('move a table by clicks, by keyboard, and by dragging its header', async ({
   const box = async () => (await cell(page, 'M').boundingBox())!
 
   await page.getByRole('button', { name: 'Move table' }).click()
-  await expect(page.getByText('Click on the canvas where the table should go.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Move table' })).toHaveAttribute('aria-pressed', 'true')
   await canvas(page).click({ position: { x: 400, y: 300 } })
   const svgBox = (await canvas(page).boundingBox())!
   let b = await box()
@@ -194,17 +195,17 @@ test('move a table by clicks, by keyboard, and by dragging its header', async ({
   expect(Math.round(b.y - afterKeys.y)).toBe(40)
 })
 
-test('Escape and Cancel end an operation without changing the document', async ({ page }) => {
+test('Escape, or the pressed button, ends an operation without changing the document', async ({ page }) => {
   await pasteList(page, 'E')
   await field(page, 'E').click()
   await page.getByRole('button', { name: 'Place in diagram' }).click()
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('region', { name: 'Current operation' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Place in diagram' })).toHaveAttribute('aria-pressed', 'false')
   await canvas(page).click({ position: { x: 200, y: 200 } })
   await expect(page.locator('.relation')).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Place in diagram' }).click()
-  await page.getByRole('button', { name: /Cancel/ }).click()
+  await page.getByRole('button', { name: 'Placing…' }).click() // pressing it again cancels
   await canvas(page).click({ position: { x: 200, y: 200 } })
   await expect(page.locator('.relation')).toHaveCount(0)
   await expect(field(page, 'E')).toHaveAttribute('aria-pressed', 'true')

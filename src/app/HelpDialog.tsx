@@ -66,31 +66,29 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <h3>Attributes</h3>
         <ul>
           <li>
-            <strong>Select</strong> selects one cell per click; <strong>Select several</strong> adds or removes a cell with every click.
+            Click a cell to select it. The toolbar next to the selection marks it as <strong>Primary key</strong>, <strong>Nullable</strong>{' '}
+            or <strong>Calculated</strong>, renames (or double-click, or <kbd>Enter</kbd>), reorders (or <kbd>←</kbd> <kbd>→</kbd>) and deletes
+            (or <kbd>Del</kbd>). Hover a button to see what it does.
           </li>
           <li>
-            The bar above the diagram marks the selection as <strong>Primary key</strong>, <strong>Nullable</strong> or{' '}
-            <strong>Calculated</strong>, renames (or double-click, or <kbd>Enter</kbd>), reorders (or <kbd>←</kbd> <kbd>→</kbd>) and deletes (or{' '}
-            <kbd>Del</kbd>).
+            <strong>Add to selection</strong>: every click adds or removes a cell of the same table (<kbd>Shift</kbd>-click does this too).{' '}
           </li>
           <li>
-            <strong>Move</strong> / <strong>Copy</strong>: click the attributes, <strong>Next</strong> (<kbd>Enter</kbd>), then click a table,
-            the left or right half of a cell, or empty canvas. <strong>Move to…</strong> / <strong>Copy to…</strong> do the same for the
-            current selection. Dragging a cell moves it.
+            <strong>Move</strong> / <strong>Copy</strong>, then click a table, the left or right half of a cell, or empty canvas; the
+            canvas shows where they will go. Click the pressed button again (or <kbd>Esc</kbd>) to cancel. Dragging a cell moves it.
           </li>
           <li>A table that loses its last attribute is removed.</li>
         </ul>
         <h3>References</h3>
         <ul>
           <li>
-            <strong>Reference</strong>: click the foreign-key attribute (or several, side by side in one table), <strong>Next</strong>{' '}
-            (<kbd>Enter</kbd>), then click the attributes they refer to (also side by side), and <strong>Finish</strong> (<kbd>Enter</kbd>).
-            The attributes pair up left to right, as the numbers on the cells show; put them in the right order first with{' '}
-            <kbd>←</kbd> <kbd>→</kbd>.
+            Select the foreign-key attribute (or several, side by side), then <strong>Reference</strong> and click the attribute it
+            refers to. For several, hovering a cell shows the block of side-by-side attributes it would pick, starting there; one click creates
+            the reference.
           </li>
           <li>
-            <strong>Reference from…</strong> uses the selected attributes as the foreign key. <strong>Back</strong> returns to the foreign
-            key; <kbd>Esc</kbd> cancels without changing anything.
+            The attributes pair up left to right, as the numbers on the cells show; put them in the right order first with{' '}
+            <kbd>←</kbd> <kbd>→</kbd>. Click the pressed button again (or <kbd>Esc</kbd>) to cancel.
           </li>
           <li>
             Click a connector to select it, then <strong>Delete reference</strong> (or <kbd>Del</kbd>). Deleting an attribute or table also
@@ -106,7 +104,8 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <ul>
           <li>Click a table’s header band to select it. Tables need no name; use <strong>Name table</strong> to add or clear one.</li>
           <li>
-            Move a table with <strong>Move table</strong> and a click, by dragging its header band, or with the arrow keys.
+            Copy a table with <strong>Copy table</strong> and a click (the copy has no name). Move a table with <strong>Move table</strong> and a click (an outline shows where), by dragging its header band, or with the
+            arrow keys.
           </li>
           <li>Click <strong>+</strong> after the last attribute to type new attributes.</li>
           <li>
@@ -117,19 +116,22 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <h3>Undo and canvas</h3>
         <ul>
           <li>
-            Undo <kbd>{MOD_KEY}+Z</kbd>, redo <kbd>{MOD_KEY}+Shift+Z</kbd>, also with the buttons at the top. <kbd>Esc</kbd> cancels the
-            current step.
+            Undo <kbd>{MOD_KEY}+Z</kbd>, redo <kbd>{MOD_KEY}+Shift+Z</kbd>, also with the buttons above the diagram. <kbd>Esc</kbd> cancels
+            the current step.
           </li>
-          <li>Scroll to pan, pinch to zoom, or use the zoom buttons. The fit button shows the whole diagram.</li>
+          <li>
+            Scroll to pan, pinch to zoom, or use the zoom buttons. The fit button shows the whole diagram; <kbd>{MOD_KEY}+0</kbd> resets the
+            zoom.
+          </li>
         </ul>
         <h3>Handing in</h3>
         <ul>
           <li>
-            <strong>Copy image</strong> puts the diagram on the clipboard as a picture: only the tables, notation and references, on white.
+            <strong>Copy as image</strong> puts the diagram on the clipboard as a picture: only the tables, notation and references, on white.
             Paste it into your answer and check that it arrived; Krijt only reports success when the browser confirms the copy.
           </li>
           <li>
-            <strong>Copy data</strong> copies the diagram as plain text: each table's name (unnamed ones as #1, #2, …) with its columns indented below,
+            <strong>Copy as text</strong> copies the diagram as plain text: each table's name (unnamed ones as #1, #2, …) with its columns indented below,
             with *keys* in asterisks, / for calculated, ° for nullable, and references written as “klantnr → Klant.klantnr”.
             Use it when text answers are allowed. Krijt cannot load it back.
           </li>
@@ -139,7 +141,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
         <p>
           Krijt keeps a copy of your work in this browser tab only, so a reload restores it. Closing the tab, a browser crash, another
           device or the exam environment can lose it. It is not a saved file. Undo history does not survive a reload.{' '}
-          <strong>New</strong> starts an empty diagram (undo brings the old one back until you reload).
+          <strong>Clear diagram</strong> starts an empty diagram (undo brings the old one back until you reload).
         </p>
       </div>
     </dialog>

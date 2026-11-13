@@ -527,10 +527,6 @@ main {
   background: var(--error-bg);
   border-color: var(--error);
 }
-.bar-message.info {
-  color: var(--ink);
-  background: var(--warn-bg);
-}
 
 .canvas {
   position: relative;
@@ -549,6 +545,11 @@ main {
 .canvas[data-choosing] .canvas-svg,
 .canvas[data-operation='moveTable'] .canvas-svg {
   cursor: crosshair;
+}
+/* Making a reference: a cell that cannot be its other end. */
+.canvas[data-blocked] .canvas-svg,
+.canvas[data-blocked] .cell {
+  cursor: not-allowed;
 }
 .canvas-background {
   fill-opacity: 1;

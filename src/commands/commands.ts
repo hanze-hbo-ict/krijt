@@ -44,11 +44,11 @@ export type Command =
   /** Clear diagram: removes all tables and references, and also the form fields unless `keepFields`. */
   | { type: 'clearDocument'; keepFields: boolean }
 
-/** `notice` tells the student about dependent changes, e.g. references removed with an attribute. */
-export type CommandResult = { ok: true; doc: KrijtDocument; notice?: string } | { ok: false; error: string }
+/** Dependent changes (references removed with an attribute, an emptied table) are visible in the diagram, not reported. */
+export type CommandResult = { ok: true; doc: KrijtDocument } | { ok: false; error: string }
 
 const fail = (error: string): CommandResult => ({ ok: false, error })
-const ok = (doc: KrijtDocument, notice?: string): CommandResult => (notice ? { ok: true, doc, notice } : { ok: true, doc })
+const ok = (doc: KrijtDocument): CommandResult => ({ ok: true, doc })
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
@@ -141,12 +141,6 @@ function placeAttributes(relations: Relation[], attributes: Attribute[], destina
     out = [...relations, { id: destination.relationId, name: null, position: { x: Math.round(x), y: Math.round(y) }, attributes }]
   }
   return out.filter((r) => r.attributes.length > 0)
-}
-
-function emptiedTablesNotice(before: KrijtDocument, after: Relation[]): string | undefined {
-  const remaining = new Set(after.map((r) => r.id))
-  const removed = before.relations.filter((r) => !remaining.has(r.id)).length
-  return removed > 0 ? `${plural(removed, 'empty table')} removed.` : undefined
 }
 
 /**
@@ -250,6 +244,8 @@ export const REFERENCE_ADJACENT_ERROR =
  * side (the course convention, which keeps every end a movable unit). Keys and
  * names are never checked.
  */
+const sameIds = (a: Id[], b: Id[]) => a.length === b.length && a.every((id, i) => id === b[i])
+
 export function referenceProblem(doc: KrijtDocument, from: ReferenceEnd, to: ReferenceEnd): string | null {
   const owner = new Map<Id, Id>()
   for (const r of doc.relations) for (const a of r.attributes) owner.set(a.id, r.id)
@@ -264,12 +260,13 @@ export function referenceProblem(doc: KrijtDocument, from: ReferenceEnd, to: Ref
     return `The foreign key has ${plural(from.attributeIds.length, 'attribute')}; select the same number of referenced attributes.`
   if (from.attributeIds.some((id) => to.attributeIds.includes(id))) return 'An attribute cannot refer to itself.'
   if (!isContiguous(doc, from.attributeIds) || !isContiguous(doc, to.attributeIds)) return REFERENCE_ADJACENT_ERROR
+  const f = orderAttributeIds(doc, from.attributeIds)
+  const t = orderAttributeIds(doc, to.attributeIds)
+  if (doc.references.some((ref) => sameIds(ref.from.attributeIds, f) && sameIds(ref.to.attributeIds, t))) return 'That reference already exists.'
   return null
 }
 
 export const REFERENCE_ONE_TABLE_ERROR = 'Each end of a reference must lie within one table.'
-
-const sameIds = (a: Id[], b: Id[]) => a.length === b.length && a.every((id, i) => id === b[i])
 
 export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
   switch (cmd.type) {
@@ -346,11 +343,7 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
       const r = doc.relations.find((x) => x.id === cmd.relationId)
       if (!r) return fail('That table no longer exists.')
       const references = doc.references.filter((ref) => ref.from.relationId !== cmd.relationId && ref.to.relationId !== cmd.relationId)
-      const removedRefs = doc.references.length - references.length
-      return ok(
-        { ...doc, relations: doc.relations.filter((x) => x.id !== cmd.relationId), references },
-        removedRefs > 0 ? `${plural(removedRefs, 'reference')} removed with the table.` : undefined,
-      )
+      return ok({ ...doc, relations: doc.relations.filter((x) => x.id !== cmd.relationId), references })
     }
     case 'renameAttribute': {
       const name = cmd.name.trim()
@@ -390,13 +383,7 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
         .filter((r) => r.attributes.length > 0)
       const touches = (ref: Reference) => [...ref.from.attributeIds, ...ref.to.attributeIds].some((id) => attrs.set.has(id))
       const references = doc.references.filter((ref) => !touches(ref))
-      const removedRefs = doc.references.length - references.length
-      const parts = [`Deleted ${plural(attrs.ordered.length, 'attribute')}`]
-      if (removedRefs > 0) parts.push(`and ${plural(removedRefs, 'reference')} that used ${attrs.ordered.length === 1 ? 'it' : 'them'}`)
-      let notice = parts.join(' ') + '.'
-      const emptied = emptiedTablesNotice(doc, relations)
-      if (emptied) notice += ` ${emptied}`
-      return ok({ ...doc, relations, references }, notice)
+      return ok({ ...doc, relations, references })
     }
     case 'shiftAttributes': {
       const attrs = existingAttributes(doc, cmd.attributeIds)
@@ -459,9 +446,7 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
     case 'moveAttributes': {
       if (!existingAttributes(doc, cmd.attributeIds)) return fail('Those attributes no longer exist.')
       // A reference end moves as a unit: moving one member brings the others along.
-      const asked = new Set(cmd.attributeIds)
       const attrs = existingAttributes(doc, expandToUnits(doc, cmd.attributeIds))!
-      const along = attrs.ordered.filter((id) => !asked.has(id))
       const dest = snapDestination(doc, cmd.destination, attrs.set)
       if (dest.kind === 'newTable' && !freshIds(doc, [dest.relationId])) return fail('Table ID is not unique.')
       const destRelationId = dest.relationId
@@ -490,12 +475,7 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
           end.attributeIds.every((id) => attrs.set.has(id)) ? { ...end, relationId: destRelationId } : end
         return { ...ref, from: moveEnd(ref.from), to: moveEnd(ref.to) }
       })
-      const byIdName = (id: Id) => byId.get(id)?.name || '(no name)'
-      const notes = [
-        along.length > 0 ? `Moved ${along.map(byIdName).join(', ')} along, to keep the reference together.` : undefined,
-        emptiedTablesNotice(doc, relations),
-      ].filter(Boolean)
-      return ok({ ...doc, relations, references }, notes.length ? notes.join(' ') : undefined)
+      return ok({ ...doc, relations, references })
     }
     case 'copyAttributes': {
       const attrs = existingAttributes(doc, cmd.attributeIds)
@@ -515,10 +495,6 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
       if (!freshIds(doc, [id])) return fail('Reference ID is not unique.')
       const problem = referenceProblem(doc, from, to)
       if (problem) return fail(problem)
-      const f = orderAttributeIds(doc, from.attributeIds)
-      const t = orderAttributeIds(doc, to.attributeIds)
-      if (doc.references.some((ref) => sameIds(ref.from.attributeIds, f) && sameIds(ref.to.attributeIds, t)))
-        return fail('That reference already exists.')
       // Ends are stored in table order: the pairing is left to right, as the diagram shows it.
       const reference: Reference = {
         id,

@@ -86,9 +86,10 @@ appearance (system, light, dark).
   composite key of N attributes, one click picks N side-by-side cells, starting at the clicked one and shifted left
   where needed to fit the table; hovering previews the block with its pairing numbers and the connector. The ends pair
   up **left to right in table order** (selection order does not matter, and the ends are stored in table order);
-  composite ends show numbered badges. Pressing the button again, or Escape, changes nothing. Impossible picks (a
-  foreign key not side by side, a table with too few attributes, a foreign-key attribute as its own target) are
-  refused with a message. Nothing checks keys or names: a target need not be a primary key.
+  composite ends show numbered badges. Pressing the button again, or Escape, changes nothing. Impossible picks are
+  blocked rather than reported: **Reference** is disabled unless the selected attributes are side by side, and a cell
+  that cannot be the other end (a table with too few attributes, a foreign-key attribute as its own target, an existing
+  reference) gets no preview and a not-allowed cursor; clicking it does nothing. Nothing checks keys or names: a target need not be a primary key.
 - **Ends are units.** ← → on a whole composite end shift it as one block, and other attributes jump over it. ← → on
   part of an end reorder inside it (which changes the left-to-right pairing, as the diagram shows); once the part
   reaches the end's edge, the next press moves the whole block. A reorder that would separate overlapping ends moves
@@ -108,9 +109,10 @@ appearance (system, light, dark).
 
 **Names**: table and column names may contain only letters, marks and digits of any script (accents, Greek,
 Cyrillic, … included), dashes (Unicode Pd: `-`, `–`, `—`) and connectors (Unicode Pc: `_`). While typing a name, a
-space becomes an underscore and other characters are left out; commands refuse invalid names. Form-field labels
-stay free text; placing a field converts its label (each run of other characters becomes one underscore, repeated
-underscores become one and outer ones are dropped; typed dashes stay: `Datum (dd-mm)` → `Datum_dd-mm`). Names from sessions made before this rule still load.
+space becomes an underscore and other characters are left out; commands refuse invalid names. Form fields follow
+the same rules: typing filters as above, and a pasted line is converted (each run of other characters becomes one
+underscore, repeated underscores become one and outer ones are dropped; dashes stay: `Datum (dd-mm)` → `Datum_dd-mm`).
+Names and fields from sessions made before these rules still load; placing such a field converts it the same way.
 
 **Tables**: click the header band to select; **Name table / Rename table** (empty = unnamed), **Add attribute**, **Move
 table** and **Copy table** (then click where it goes; the copy has no name and no references), **Delete table**. Tables also move by dragging the header band or with
@@ -123,8 +125,8 @@ including layout: a multi-attribute move with its empty-table removal is one ste
 table form one step. Inside text fields the browser's own undo is left alone. Undo restores deleted tables in place,
 so deletion needs no confirmation.
 
-**Messages** about dependent changes ("Deleted 2 attributes and 1 reference that used them. 1 empty table removed.")
-and refused operations appear over the top of the canvas.
+**Messages**: only errors (a failed copy, a session that could not be restored, form fields with nothing to use as a
+name) appear, over the top of the canvas. What an action changed shows in the diagram itself.
 
 **Canvas and recovery**: scroll to pan, pinch to zoom, zoom buttons, 100% and Fit. The document, viewport, collapsed sidebar
 and appearance are saved to `sessionStorage` (debounced, and at once when the tab is hidden or the page unloads, so a change
@@ -255,11 +257,11 @@ Positions of tables are part of the document; viewport, selection, the active op
 Notation (PK, nullable, calculated) lives in independent boolean flags, never in the stored name.
 
 **Commands.** Every edit is a plain-data `Command` applied by the pure `applyCommand(doc, cmd)`, which returns
-`{ ok, doc, notice? }` or `{ ok: false, error }` and never mutates its input. Commands carry every ID they introduce
+`{ ok, doc }` or `{ ok: false, error }` and never mutates its input. Commands carry every ID they introduce
 (builders generate them before dispatch), so applying a command is deterministic. Edits with dependent changes are one
 command: `moveAttributes` removes the moved attributes, inserts them (index adjusted for attributes that moved out
 from before it), drops emptied tables and re-points reference ends; `deleteAttributes` also removes dangling references
-and empty tables and returns a `notice`. Commands check structure only, never normalization rules.
+and empty tables. Only errors are reported; dependent changes show in the diagram. Commands check structure only, never normalization rules.
 
 **Destinations.** One `Destination` type (`table` + index, or `newTable` + position) serves Place, Move, Copy and all
 drops. `destinationFor(doc, target, point)` turns a hit target into a destination; a cell target carries which half was
@@ -296,7 +298,7 @@ E2E hook fails any test that triggers a request to another host.
 ## Deviations from the plan and decisions
 
 - **Restricted names** (not in the plan): letters, digits, dashes and underscores only, so the text export needs no
-  quoting or escaping. Form-field labels stay free text and are converted when placed.
+  quoting or escaping. Form fields follow the same rules (converted when pasted, filtered when typed).
 - **Copy as text is a plain-text description, not the internal document as JSON** (plan §6.2 says "serialize a
   complete, versioned `KrijtDocument` to plain JSON text"). The internal format's random IDs made references
   unreadable; the text keeps what is needed to understand the answer (tables, column order, notation, references)

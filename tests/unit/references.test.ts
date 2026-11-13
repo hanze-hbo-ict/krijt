@@ -6,8 +6,8 @@ import { contentBounds, estimateMeasurer as m, layoutRelation, type RelationLayo
 import { bracePath, layoutReferences, REFERENCE_METRICS } from '../../src/geometry/references'
 import { emptyDocument, newAttribute, type Id, type KrijtDocument, type Reference, type Relation } from '../../src/model/types'
 import { parseDocument } from '../../src/model/validate'
-import { initialState, NO_ATTRIBUTES_MESSAGE, reducer, type Action, type AppState } from '../../src/state/appState'
-import { referenceBlock, resolveCanvasClick, type CanvasTarget } from '../../src/state/interaction'
+import { initialState, reducer, type Action, type AppState } from '../../src/state/appState'
+import { referenceBlock, referenceIntent, resolveCanvasClick, type CanvasTarget } from '../../src/state/interaction'
 
 const rel = (id: string, names: string[], x = 0, y = 0, name: string | null = null): Relation => ({
   id,
@@ -271,21 +271,25 @@ describe('Reference mode', () => {
     expect(s.doc.references[0]!.to.attributeIds).toEqual(['r.ordernr', 'r.regelnr'])
   })
 
-  it('a table with too few attributes explains and keeps the operation', () => {
+  it('a table with too few attributes is not a target: clicking it does nothing', () => {
     let s = initialState(docWith([rel('r', ['ordernr'], 0, 0), rel('l', ['ordernr', 'regelnr'], 0, 250)]))
     s = referenceFrom(s, 1, 'ordernr', 'regelnr')
-    s = click(s, cell(s, 0, 'ordernr'))
+    const target = cell(s, 0, 'ordernr')
+    expect(referenceIntent(s, (target as { attributeId: Id }).attributeId)).toEqual({
+      problem: 'This table has only 1 attribute; the foreign key has 2.',
+    })
+    s = click(s, target)
     expect(s.doc.references).toEqual([])
-    expect(message(s)).toBe('This table has only 1 attribute; the foreign key has 2.')
+    expect(message(s)).toBeNull()
     expect(s.ui.operation.kind).toBe('reference')
   })
 
-  it('"Reference" needs a side-by-side selection, and explains otherwise', () => {
+  it('"Reference" needs a side-by-side selection (the button is disabled otherwise)', () => {
     let s = initialState(docWith([rel('l', ['ordernr', 'levnr', 'regelnr'], 0, 250)]))
     s = referenceFrom(s, 0, 'ordernr', 'regelnr')
     expect(s.ui.operation.kind).toBe('select')
-    expect(message(s)).toMatch(/next to each other/)
-    expect(message(run(twoTables(), { type: 'startReference' }))).toBe(NO_ATTRIBUTES_MESSAGE)
+    expect(message(s)).toBeNull()
+    expect(run(twoTables(), { type: 'startReference' }).ui.operation.kind).toBe('select')
   })
 })
 
@@ -367,15 +371,25 @@ describe('reference ends as units', () => {
     expect(geometryOf(s.doc)[0]!.dots).toEqual([])
   })
 
-  it('explains impossible references without changing anything', () => {
+  it('impossible targets are not targets: clicking one changes nothing and shows no message', () => {
+    const problem = (s: AppState, t: CanvasTarget) => referenceIntent(s, (t as { attributeId: Id }).attributeId)
     let s = referenceFrom(twoTables(), 1, 'klantnr')
     // A foreign-key attribute as its own target.
+    expect(problem(s, cell(s, 1, 'klantnr'))).toEqual({ problem: 'An attribute cannot refer to itself.' })
     const self = click(s, cell(s, 1, 'klantnr'))
-    expect(message(self)).toMatch(/cannot refer to itself/)
     expect(self.doc).toBe(s.doc)
-    // A block that is not side by side cannot happen; a block overlapping the foreign key in the same table explains too.
+    expect(message(self)).toBeNull()
+    expect(self.ui.operation.kind).toBe('reference')
+    // A block overlapping the foreign key in the same table.
     s = referenceFrom(twoTables(), 1, 'datum', 'klantnr')
-    expect(message(click(s, cell(s, 1, 'ordernr')))).toMatch(/cannot refer to itself/)
+    expect(problem(s, cell(s, 1, 'ordernr'))).toEqual({ problem: 'An attribute cannot refer to itself.' })
+    // A reference that already exists.
+    s = referenceFrom(twoTables(), 1, 'klantnr')
+    s = click(s, cell(s, 0, 'klantnr'))
+    expect(s.doc.references).toHaveLength(1)
+    s = referenceFrom(s, 1, 'klantnr')
+    expect(problem(s, cell(s, 0, 'klantnr'))).toEqual({ problem: 'That reference already exists.' })
+    expect(click(s, cell(s, 0, 'klantnr')).doc.references).toHaveLength(1)
   })
 
   it('Escape cancels without touching the document; stray clicks do nothing', () => {
@@ -410,7 +424,6 @@ describe('reference ends as units', () => {
     s = run(s, { type: 'command', command: { type: 'addReference', reference: ref('x', ['b', ['b.klantnr']], ['k', ['k.klantnr']]) } })
     s = run(s, { type: 'command', command: { type: 'deleteRelation', relationId: 'k' } })
     expect(s.doc.references).toEqual([])
-    expect(message(s)).toMatch(/1 reference removed/)
     s = run(s, { type: 'undo' })
     expect(s.doc.relations).toHaveLength(2)
     expect(s.doc.references).toHaveLength(1)

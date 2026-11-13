@@ -116,12 +116,11 @@ describe('move', () => {
     expect(names(d2, 'A')).toEqual(['e', 'a', 'b', 'c', 'd'])
   })
 
-  it('removes a table that becomes empty and says so', () => {
+  it('removes a table that becomes empty', () => {
     const doc = docWith([rel('A', ['a']), rel('B', ['b'], 100)])
     const r = apply(doc, { type: 'moveAttributes', attributeIds: ['A.a'], destination: { kind: 'table', relationId: 'B', index: 0 } })
     expect(r.doc.relations.map((x) => x.id)).toEqual(['B'])
     expect(names(r.doc, 'B')).toEqual(['a', 'b'])
-    expect(r.notice).toMatch(/1 empty table removed/)
   })
 
   it('moving all attributes of a table into itself is a reorder, not a removal', () => {
@@ -144,7 +143,6 @@ describe('move', () => {
     expect(r.doc.relations.map((x) => x.id)).toEqual(['A', 'N'])
     expect(r.doc.relations[1]!.attributes.map((a) => a.id)).toEqual(['B.fk1', 'B.fk2'])
     expect(r.doc.references[0]!.from).toEqual({ relationId: 'N', attributeIds: ['B.fk1', 'B.fk2'] })
-    expect(r.notice).toMatch(/Moved fk2 along, to keep the reference together\. 1 empty table removed\./)
   })
 
   it('rejects missing attributes and destinations', () => {
@@ -199,11 +197,10 @@ describe('delete', () => {
     expect(names(r.doc, 'A')).toEqual(['x'])
     expect(r.doc.relations.map((x) => x.id)).toEqual(['A', 'B'])
     expect(r.doc.references).toEqual([])
-    expect(r.notice).toBe('Deleted 2 attributes and 1 reference that used them. 1 empty table removed.')
   })
 
-  it('deleting a table reports the references it removed', () => {
+  it('deleting a table removes its references', () => {
     const doc = docWith([rel('A', ['id']), rel('B', ['fk'], 100)], [ref('R', ['B', ['B.fk']], ['A', ['A.id']])])
-    expect(apply(doc, { type: 'deleteRelation', relationId: 'A' }).notice).toBe('1 reference removed with the table.')
+    expect(apply(doc, { type: 'deleteRelation', relationId: 'A' }).doc.references).toEqual([])
   })
 })

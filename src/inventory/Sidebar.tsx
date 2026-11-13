@@ -25,13 +25,14 @@ import {
 } from 'react'
 import { DRAG_THRESHOLD, type CanvasHandle, type DragGhost } from '../canvas/Canvas'
 import { Separator, ToolButton } from '../canvas/SelectionToolbar'
-import { browserEnv, COPY_MESSAGES, copyText, failureMessage } from '../clipboard/clipboard'
+import { browserEnv, copyText, failureMessage } from '../clipboard/clipboard'
 import { placeAction } from '../state/interaction'
 import { addSourceFields, parseFieldList } from '../commands/builders'
 import { Icon } from '../components/Icon'
 import { InlineInput } from '../components/InlineInput'
 import type { SourceField } from '../model/types'
 import { MAX_TEXT_LENGTH } from '../model/validate'
+import { toValidName, typedName } from '../model/names'
 import type { Action, AppState } from '../state/appState'
 
 interface Props {
@@ -115,12 +116,12 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
     add(parseFieldList(text))
   }
 
-  const say = (kind: 'error' | 'info', text: string) => dispatch({ type: 'ui', patch: { message: { kind, text } } })
+
   const onCopy = () => {
     const text = stateRef.current.doc.sourceFields.map((f) => f.label).join('\n')
     void copyText(browserEnv(), text).then((result) => {
-      if (!result.ok) return say('error', failureMessage('fields', result.reason, result.detail))
-      say('info', COPY_MESSAGES.fieldsCopied)
+      if (!result.ok)
+        return dispatch({ type: 'ui', patch: { message: { kind: 'error', text: failureMessage('fields', result.reason, result.detail) } } })
       setCopied(true)
       if (copiedTimer.current) clearTimeout(copiedTimer.current)
       copiedTimer.current = setTimeout(() => setCopied(false), 1500)
@@ -163,6 +164,9 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
             <Icon name={copied ? 'check' : 'copy'} />
           </button>
         )}
+        <span className="visually-hidden" aria-live="polite">
+          {copied ? 'Form fields copied' : ''}
+        </span>
         <button
           type="button"
           className="icon-button"
@@ -219,7 +223,7 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
           className="field-entry"
           onSubmit={(e) => {
             e.preventDefault()
-            if (entry.trim() === '') return
+            if (toValidName(entry) === '') return
             add([entry])
             setEntry('')
           }}
@@ -231,7 +235,13 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
             maxLength={MAX_TEXT_LENGTH}
             spellCheck={false}
             autoComplete="off"
-            onChange={(e) => setEntry(e.target.value)}
+            onChange={(e) => {
+              // As in the diagram's name inputs: a space becomes an underscore, characters that are not allowed do not
+              // appear (not while an IME is still composing).
+              const composing = (e.nativeEvent as InputEvent).isComposing
+              setEntry(composing ? e.target.value : typedName(e.target.value))
+            }}
+            onCompositionEnd={(e) => setEntry(typedName(e.currentTarget.value))}
             onPaste={onEntryPaste}
           />
           <button
@@ -240,7 +250,7 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
             aria-label="Add field"
             data-tooltip="Add field"
             data-tooltip-pos="end"
-            disabled={entry.trim() === ''}
+            disabled={toValidName(entry) === ''}
           >
             <Icon name="plus" />
           </button>
@@ -273,7 +283,8 @@ function FieldRow({ field, selected, editing, onClick, onPress, onEdit, onRename
           className="field-edit"
           initial={field.label}
           label={`Rename field ${field.label}`}
-          onCommit={onRename}
+          sanitize={typedName}
+          onCommit={(value) => onRename(toValidName(value))}
           onCancel={onCancelEdit}
         />
       </li>

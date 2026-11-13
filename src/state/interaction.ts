@@ -61,7 +61,7 @@ export function destinationFor(doc: KrijtDocument, target: CanvasTarget, point: 
 export function placeAction(state: AppState, fieldIds: Id[], target: CanvasTarget, point: Point): Action | null {
   const labels = orderedFieldLabels(state.doc, fieldIds)
   if (labels.length === 0) return { type: 'ui', patch: { message: { kind: 'error', text: NO_FIELDS_MESSAGE } } }
-  // Form-field labels are free text; as attribute names they keep only letters, digits, dashes and underscores.
+  // Fields are valid names already, except ones kept from older sessions: convert, as when they were added.
   const names = labels.map(toValidName).filter((n) => n !== '')
   if (names.length === 0) return { type: 'ui', patch: { message: { kind: 'error', text: NO_NAME_IN_FIELDS_MESSAGE } } }
   const intent = destinationFor(state.doc, target, point)
@@ -117,9 +117,7 @@ export function referenceIntent(state: AppState, attributeId: Id): { from: Refer
   if (!block) {
     const r = doc.relations.find((x) => x.attributes.some((a) => a.id === attributeId))
     if (!r) return null
-    return {
-      problem: `This table has only ${n(r.attributes.length, 'attribute')}; the foreign key has ${op.source.length}.`,
-    }
+    return { problem: `This table has only ${n(r.attributes.length, 'attribute')}; the foreign key has ${op.source.length}.` }
   }
   const owner = attributeOwners(doc)
   const from: ReferenceEnd = { relationId: owner.get(op.source[0]!) ?? '', attributeIds: orderAttributeIds(doc, op.source) }
@@ -132,7 +130,8 @@ export function referenceIntent(state: AppState, attributeId: Id): { from: Refer
 export function referenceAction(state: AppState, attributeId: Id): Action | null {
   const intent = referenceIntent(state, attributeId)
   if (!intent) return null
-  if ('problem' in intent) return { type: 'ui', patch: { message: { kind: 'error', text: intent.problem } } }
+  // An impossible target is not highlighted and shows a not-allowed cursor; clicking it does nothing.
+  if ('problem' in intent) return null
   const command = addReference(intent.from, intent.to)
   if (command.type !== 'addReference') return null
   return {

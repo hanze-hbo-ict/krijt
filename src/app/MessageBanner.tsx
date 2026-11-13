@@ -1,5 +1,5 @@
 /**
- * Errors and notices, over the top of the canvas so they never move the diagram.
+ * Errors, over the top of the canvas so they never move the diagram. (Successful actions show in the diagram itself.)
  */
 import type { Dispatch } from 'react'
 import { Icon } from '../components/Icon'
@@ -10,7 +10,7 @@ export function MessageBanner({ state, dispatch }: { state: AppState; dispatch: 
   return (
     <div className="message-slot" aria-live="polite">
       {message && (
-        <div className={`bar-message ${message.kind}`} role={message.kind === 'error' ? 'alert' : 'status'}>
+        <div className="bar-message error" role="alert">
           <span>{message.text}</span>
           <button type="button" className="icon-button" aria-label="Dismiss message" onClick={() => dispatch({ type: 'ui', patch: { message: null } })}>
             <Icon name="close" />

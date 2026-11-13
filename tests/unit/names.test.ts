@@ -52,19 +52,25 @@ describe('names in the document', () => {
     expect(applyCommand(doc, { type: 'addAttributes', relationId: 'r', attributes: [newAttribute('b', 'a/b')] })).toEqual({ ok: false, error: NAME_RULE })
   })
 
-  it('placing form fields converts their free-text labels into names', () => {
-    let s = reducer(initialState(), { type: 'command', command: addSourceFields(['Datum (dd-mm)', 'Αριθμός πελάτη', '***'])! })
+  it('form fields follow the name rules: added labels are converted, unusable ones dropped', () => {
+    const s = reducer(initialState(), { type: 'command', command: addSourceFields(['Datum (dd-mm)', 'Αριθμός πελάτη', '***'])! })
+    expect(s.doc.sourceFields.map((f) => f.label)).toEqual(['Datum_dd-mm', 'Αριθμός_πελάτη'])
+    expect(addSourceFields(['***', '(…)'])).toBeNull()
+  })
+
+  it('fields from an older session (free text) are converted when placed', () => {
+    const doc = { ...emptyDocument(), sourceFields: [{ id: 'f1', label: 'Datum (dd-mm)' }, { id: 'f2', label: '***' }] }
+    let s = initialState(doc)
     for (const f of s.doc.sourceFields) s = reducer(s, { type: 'toggleField', fieldId: f.id })
     s = reducer(s, { type: 'startPlace' })
     s = reducer(s, resolveCanvasClick(s, { kind: 'empty' }, { x: 0, y: 0 })!)
-    expect(s.doc.relations[0]!.attributes.map((a) => a.name)).toEqual(['Datum_dd-mm', 'Αριθμός_πελάτη'])
-    // The labels themselves are unchanged.
-    expect(s.doc.sourceFields.map((f) => f.label)).toEqual(['Datum (dd-mm)', 'Αριθμός πελάτη', '***'])
+    expect(s.doc.relations[0]!.attributes.map((a) => a.name)).toEqual(['Datum_dd-mm'])
+    expect(s.doc.sourceFields.map((f) => f.label)).toEqual(['Datum (dd-mm)', '***'])
   })
 
-  it('a field with nothing usable explains why nothing is placed', () => {
-    let s = reducer(initialState(), { type: 'command', command: addSourceFields(['***'])! })
-    s = reducer(s, { type: 'toggleField', fieldId: s.doc.sourceFields[0]!.id })
+  it('an older field with nothing usable explains why nothing is placed', () => {
+    let s = initialState({ ...emptyDocument(), sourceFields: [{ id: 'f1', label: '***' }] })
+    s = reducer(s, { type: 'toggleField', fieldId: 'f1' })
     s = reducer(s, { type: 'startPlace' })
     s = reducer(s, resolveCanvasClick(s, { kind: 'empty' }, { x: 0, y: 0 })!)
     expect(s.doc.relations).toEqual([])

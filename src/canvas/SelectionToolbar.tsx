@@ -9,7 +9,7 @@
  * Escape does. Its other buttons are unavailable meanwhile.
  */
 import { useLayoutEffect, useRef, type Dispatch, type ReactNode } from 'react'
-import type { AttributeFlag } from '../commands/commands'
+import { isContiguous, type AttributeFlag } from '../commands/commands'
 import { Icon } from '../components/Icon'
 import type { Attribute, KrijtDocument } from '../model/types'
 import { selectedAttributeIds, type Action, type AppState } from '../state/appState'
@@ -163,6 +163,7 @@ function AttributeActions({ state, dispatch }: ActionProps) {
   const found = findAttributes(state.doc, ids)
   if (found.length === 0) return null
   const single = found.length === 1 ? found[0]! : null
+  const adjacent = isContiguous(state.doc, ids)
   const op = state.ui.operation.kind
   const busy = op !== 'select'
   // An operation button toggles: pressed while its operation runs, and pressing it again cancels.
@@ -234,7 +235,13 @@ function AttributeActions({ state, dispatch }: ActionProps) {
       <ToolButton label="Copy" {...operation('copy', { type: 'startAttributes', kind: 'copy' })}>
         <Icon name="copy" />
       </ToolButton>
-      <ToolButton label="Reference" {...operation('reference', { type: 'startReference' })}>
+      <ToolButton
+        label="Reference"
+        {...operation('reference', { type: 'startReference' })}
+        // A reference end is side by side in its table: offer it only for such a selection.
+        disabled={(busy && op !== 'reference') || !adjacent}
+        tooltip={adjacent ? undefined : 'Reference: select attributes that are side by side'}
+      >
         <Icon name="reference" />
       </ToolButton>
       <Separator />

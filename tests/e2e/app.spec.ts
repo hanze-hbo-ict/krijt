@@ -98,7 +98,7 @@ test('single entry with Enter, multi-line paste into the entry, rename and remov
     el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
   })
   await expect(field(page, 'Café')).toBeVisible()
-  await expect(field(page, '<b>Één</b>')).toBeVisible() // shown as text, not HTML
+  await expect(field(page, 'b_Één_b')).toBeVisible() // converted to a valid name, never HTML
 
   await field(page, 'Café').click()
   await fieldTool(page, 'Rename').click()

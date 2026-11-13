@@ -9,7 +9,7 @@
  * The reducer is pure. Anything that needs fresh IDs (building commands) is
  * resolved before dispatch, in interaction.ts.
  */
-import { applyCommand, isContiguous, REFERENCE_ADJACENT_ERROR, type Command } from '../commands/commands'
+import { applyCommand, isContiguous, type Command } from '../commands/commands'
 import type { Id, KrijtDocument } from '../model/types'
 import { emptyDocument } from '../model/types'
 import { DEFAULT_VIEWPORT, type Viewport } from '../geometry/viewport'
@@ -46,7 +46,8 @@ export type Editing =
   | { kind: 'newAttribute'; relationId: Id }
   | { kind: 'attributeName'; attributeId: Id }
 
-export type Message = { kind: 'error' | 'info'; text: string }
+/** Only errors are reported; what an action changed shows in the diagram itself. */
+export type Message = { kind: 'error'; text: string }
 
 export type UiState = {
   operation: Operation
@@ -126,7 +127,6 @@ export function selectedAttributeIds(ui: UiState): Id[] {
   return ui.selection.kind === 'attributes' ? ui.selection.attributeIds : []
 }
 
-export const NO_ATTRIBUTES_MESSAGE = 'Select one or more attributes first.'
 
 /** The table that owns each attribute. */
 export function attributeOwners(doc: KrijtDocument): Map<Id, Id> {
@@ -223,8 +223,7 @@ function step(state: AppState, action: Action): AppState {
     case 'command': {
       const result = applyCommand(state.doc, action.command)
       if (!result.ok) return { ...state, ui: { ...state.ui, message: { kind: 'error', text: result.error } } }
-      const message: Message | null = result.notice ? { kind: 'info', text: result.notice } : null
-      const ui = reconcileUi(result.doc, { ...state.ui, message, ...action.after })
+      const ui = reconcileUi(result.doc, { ...state.ui, message: null, ...action.after })
       if (result.doc === state.doc) return { ...state, ui }
       return { doc: result.doc, ui, history: pushHistory(state.history, state.doc, action.coalesceKey ?? null) }
     }
@@ -258,15 +257,14 @@ function step(state: AppState, action: Action): AppState {
         },
       }
     case 'startAttributes': {
-      if (state.ui.selection.kind !== 'attributes')
-        return { ...state, ui: { ...state.ui, message: { kind: 'error', text: NO_ATTRIBUTES_MESSAGE } } }
+      // The toolbar offers Move and Copy only for a selection.
+      if (state.ui.selection.kind !== 'attributes') return state
       return { ...state, ui: { ...state.ui, operation: { kind: action.kind }, editing: null, message: null } }
     }
     case 'startReference': {
       const source = selectedAttributeIds(state.ui)
-      const error = (text: string): AppState => ({ ...state, ui: { ...state.ui, message: { kind: 'error', text } } })
-      if (source.length === 0) return error(NO_ATTRIBUTES_MESSAGE)
-      if (!isContiguous(state.doc, source)) return error(REFERENCE_ADJACENT_ERROR)
+      // The toolbar's Reference button is disabled unless the selected attributes are side by side.
+      if (source.length === 0 || !isContiguous(state.doc, source)) return state
       return { ...state, ui: { ...state.ui, operation: { kind: 'reference', source }, editing: null, message: null } }
     }
     case 'cancel': {

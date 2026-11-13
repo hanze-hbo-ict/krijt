@@ -94,9 +94,6 @@ export async function copyText(env: ClipboardEnv, text: string): Promise<CopyRes
 }
 
 export const COPY_MESSAGES = {
-  imageCopied: 'Image copied. Paste it into your answer, and check that it arrived.',
-  dataCopied: 'Diagram data copied as text.',
-  fieldsCopied: 'Form fields copied, one per line.',
   empty: 'There is nothing to copy yet: the diagram has no tables.',
   tooLarge: 'The diagram is too large to copy as one image. Move the tables closer together and try again.',
 } as const

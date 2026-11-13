@@ -162,15 +162,14 @@ test('rename, reorder and delete attributes, with dependent deletions explained'
   await page.keyboard.press('ArrowRight')
   expect(await tables(page)).toEqual([['Bedrag', 'c', 'a']])
 
-  // Delete the last two; then the last one removes the table, with a notice.
+  // Delete the last two; then the last one removes the table. Nothing is reported.
   await page.getByRole('button', { name: 'Delete' }).click()
   expect(await tables(page)).toEqual([['Bedrag', 'c']])
-  await expect(page.getByRole('status').filter({ hasText: 'Deleted 1 attribute.' })).toBeVisible()
   await selectCells(page, [cellIn(rel, 'Bedrag'), cellIn(rel, 'c')])
   await cellIn(rel, 'c').focus()
   await page.keyboard.press('Delete')
   await expect(relations(page)).toHaveCount(0)
-  await expect(page.getByRole('status').filter({ hasText: 'Deleted 2 attributes. 1 empty table removed.' })).toBeVisible()
+  await expect(page.locator('.bar-message')).toHaveCount(0)
   await page.keyboard.press('ControlOrMeta+z')
   expect(await tables(page)).toEqual([['Bedrag', 'c']])
 })
@@ -248,7 +247,7 @@ test('drag shortcuts: a form field onto a table copies it; an attribute onto emp
 })
 
 test('selecting things or starting an operation never moves the canvas', async ({ page }) => {
-  await setup(page, ['Een lange attribuutnaam', 'b', 'c'])
+  await setup(page, ['Een_lange_attribuutnaam', 'b', 'c'])
   const box = async () => (await canvas(page).boundingBox())!
   const start = await box()
   const steps = [
@@ -259,7 +258,7 @@ test('selecting things or starting an operation never moves the canvas', async (
     () => page.keyboard.press('Escape'),
     () => action(page, 'Add to selection').click(),
     () => anyCell(page, 'c').click(),
-    () => page.getByRole('button', { name: 'Delete' }).click(), // shows a notice
+    () => page.getByRole('button', { name: 'Delete' }).click(),
   ]
   for (const step of steps) {
     await step()

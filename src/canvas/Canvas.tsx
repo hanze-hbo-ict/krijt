@@ -476,6 +476,12 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     [selection, op.kind],
   )
   // The reference a click on the hovered (or focused) cell would create: its ends and connector.
+  // A cell that cannot be the referenced end (too small a table, the foreign key itself, an existing reference).
+  const referenceBlocked = useMemo(() => {
+    if (op.kind !== 'reference' || hover?.target.kind !== 'attribute') return false
+    const intent = referenceIntent(state, hover.target.attributeId)
+    return !!intent && 'problem' in intent
+  }, [op, hover, state])
   const referencePreview = useMemo(() => {
     if (op.kind !== 'reference' || hover?.target.kind !== 'attribute') return null
     const intent = referenceIntent(state, hover.target.attributeId)
@@ -568,7 +574,13 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
   const preview = hover && hover.count > 0 && (destinationMode || hover.external) ? destinationFor(doc, hover.target, hover.point) : null
 
   return (
-    <div className="canvas" ref={containerRef} data-operation={op.kind} data-choosing={destinationMode || undefined}>
+    <div
+      className="canvas"
+      ref={containerRef}
+      data-operation={op.kind}
+      data-choosing={destinationMode || undefined}
+      data-blocked={referenceBlocked || undefined}
+    >
       <svg
         ref={svgRef}
         className="canvas-svg"

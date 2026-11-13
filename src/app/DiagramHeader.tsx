@@ -31,8 +31,9 @@ export function DiagramHeader({ state, dispatch, copying, copied, onCopyImage, o
   return (
     <div className="panel-header diagram-header">
       <h2 id="diagram-title">Diagram</h2>
+      {/* For screen readers only: the active operation, or a copy that just succeeded (shown as a checkmark). */}
       <span className="visually-hidden" aria-live="polite">
-        {operationAnnouncement(state)}
+        {copied === 'image' ? 'Image copied' : copied === 'data' ? 'Diagram copied as text' : operationAnnouncement(state)}
       </span>
       <div className="diagram-actions">
         <div className="header-group" role="group" aria-label="History">

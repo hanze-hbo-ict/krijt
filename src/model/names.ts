@@ -4,8 +4,8 @@
  * nothing else. This keeps names unambiguous in the text export, where `*`,
  * `/`, `°`, `#`, `→`, commas, parentheses and spaces all have a meaning.
  *
- * Form-field labels stay free text (they are copied from the exam's form);
- * placing a field turns its label into a valid name.
+ * Form fields follow the same rules: typed text is filtered as it is typed, pasted lines are converted with
+ * toValidName. (Fields from older sessions may still hold other characters; placing converts them.)
  */
 
 const ALLOWED = '\\p{L}\\p{M}\\p{N}\\p{Pd}\\p{Pc}'

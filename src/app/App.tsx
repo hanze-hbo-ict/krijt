@@ -93,33 +93,27 @@ export function App() {
     }
   }, [storage])
 
-  const say = (kind: 'error' | 'info', text: string) => dispatch({ type: 'ui', patch: { message: { kind, text } } })
+  const sayError = (text: string) => dispatch({ type: 'ui', patch: { message: { kind: 'error', text } } })
 
   // Both copies start synchronously inside the click, so the browser sees a user gesture.
   const onCopyImage = () => {
     const scene = exportScene(stateRef.current.doc, measurer)
-    if (!scene) return say('error', COPY_MESSAGES.empty)
+    if (!scene) return sayError(COPY_MESSAGES.empty)
     const scale = exportScale(scene.bounds)
-    if (!scale) return say('error', COPY_MESSAGES.tooLarge)
+    if (!scale) return sayError(COPY_MESSAGES.tooLarge)
     setCopying('image')
     void copyImage(browserEnv(), () => renderPng(scene, scale)).then((result) => {
       setCopying(null)
-      if (result.ok) {
-        confirmCopied('image')
-        say('info', COPY_MESSAGES.imageCopied)
-      }
-      else say('error', failureMessage('image', result.reason, result.detail))
+      if (result.ok) confirmCopied('image')
+      else sayError(failureMessage('image', result.reason, result.detail))
     })
   }
   const onCopyData = () => {
     setCopying('data')
     void copyText(browserEnv(), serializeDocument(stateRef.current.doc)).then((result) => {
       setCopying(null)
-      if (result.ok) {
-        confirmCopied('data')
-        say('info', COPY_MESSAGES.dataCopied)
-      }
-      else say('error', failureMessage('data', result.reason, result.detail))
+      if (result.ok) confirmCopied('data')
+      else sayError(failureMessage('data', result.reason, result.detail))
     })
   }
 
@@ -285,7 +279,6 @@ export function App() {
                 selectedFieldIds: [],
                 editing: null,
                 viewport: DEFAULT_VIEWPORT,
-                message: { kind: 'info', text: 'Diagram cleared. Undo brings it back.' },
               },
             })
           }

@@ -6,6 +6,7 @@ import { orderAttributeIds, type Command, type Destination } from './commands'
 import type { Id, KrijtDocument, Point, ReferenceEnd } from '../model/types'
 import { newAttribute } from '../model/types'
 import { newAttributeId, newFieldId, newReferenceId, newRelationId } from '../model/ids'
+import { toValidName } from '../model/names'
 
 /** A destination chosen by the student, before any new table ID exists. */
 export type DestinationIntent = { kind: 'table'; relationId: Id; index?: number } | { kind: 'newTable'; position: Point }
@@ -28,8 +29,9 @@ export function parseFieldList(text: string): string[] {
     .filter((line) => line !== '')
 }
 
+/** Fields follow the name rules, as table and column names do: "Datum (dd-mm)" becomes "Datum_dd-mm". */
 export function addSourceFields(labels: string[], index?: number): Command | null {
-  const clean = labels.map((l) => l.trim()).filter((l) => l !== '')
+  const clean = labels.map(toValidName).filter((l) => l !== '')
   if (clean.length === 0) return null
   return { type: 'addSourceFields', fields: clean.map((label) => ({ id: newFieldId(), label })), index }
 }

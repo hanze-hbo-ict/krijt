@@ -6,7 +6,6 @@ const canvas = (page: Page) => page.locator('.canvas-svg')
 const relations = (page: Page) => page.locator('.relation')
 const copyImage = (page: Page) => page.getByRole('button', { name: 'Copy as image' })
 const copyData = (page: Page) => page.getByRole('button', { name: 'Copy as text' })
-const status = (page: Page) => page.locator('.bar-message.info')
 const alert = (page: Page) => page.locator('.bar-message.error')
 
 const attr = (id: string, name: string, flags: Partial<Record<'primaryKey' | 'nullable' | 'calculated', boolean>> = {}) => ({
@@ -78,7 +77,7 @@ test.describe('real clipboard (Chromium)', () => {
     // Leave something selected: the export must not show it.
     await page.locator('.cell[aria-label^="Attribute naam in"]').click()
     await copyImage(page).click()
-    await expect(status(page)).toHaveText(/Image copied/)
+    await expect(copyImage(page)).toHaveAttribute('data-tooltip', 'Copied') // a checkmark, no message
 
     const png = await page.evaluate(async () => {
       const items = await navigator.clipboard.read()
@@ -117,7 +116,7 @@ test.describe('real clipboard (Chromium)', () => {
   test('Copy data puts the diagram on the clipboard as plain text', async ({ page }) => {
     await openWith(page, SAMPLE)
     await copyData(page).click()
-    await expect(status(page)).toHaveText('Diagram data copied as text.')
+    await expect(copyData(page)).toHaveAttribute('data-tooltip', 'Copied')
     const text = await page.evaluate(() => navigator.clipboard.readText())
     expect(text).toBe(
       [
@@ -160,7 +159,6 @@ test.describe('clipboard errors (all browsers)', () => {
     await openWith(page, SAMPLE)
     await copyImage(page).click()
     await expect(alert(page)).toHaveText(/blocked the clipboard.*Copy as image again/)
-    await expect(status(page)).toHaveCount(0)
     await copyData(page).click()
     await expect(alert(page)).toHaveText(/blocked the clipboard.*Copy as text again/)
     await expect(copyImage(page)).toBeEnabled()
@@ -267,22 +265,27 @@ test('a realistic exam diagram (25 fields, 10 tables, 12 references) stays respo
   await expect(canvas(page)).toBeVisible()
 })
 
-test('names accept letters of any script, dashes and underscores; typing a space gives an underscore', async ({ page }) => {
+test('names (and form fields) accept letters of any script, dashes and underscores; typing a space gives an underscore', async ({ page }) => {
   await page.goto('/')
   await page.getByLabel('New field').evaluate((el, t) => {
     const data = new DataTransfer()
     data.setData('text/plain', t + '\n')
     el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
   }, 'Datum (dd-mm)\nΑριθμός πελάτη')
+  // Pasted lines with spaces and punctuation become valid names in the list already.
   const list = page.getByRole('list', { name: 'Form fields' })
-  await list.getByRole('button', { name: 'Datum (dd-mm)', exact: true }).click()
-  await list.getByRole('button', { name: 'Αριθμός πελάτη', exact: true }).click({ modifiers: ['Shift'] })
+  await list.getByRole('button', { name: 'Datum_dd-mm', exact: true }).click()
+  await list.getByRole('button', { name: 'Αριθμός_πελάτη', exact: true }).click({ modifiers: ['Shift'] })
   await page.getByRole('button', { name: 'Place in diagram' }).click()
   await canvas(page).click({ position: { x: 60, y: 80 } })
-  // Labels with spaces and punctuation become valid names; the form fields keep their text.
   await expect(page.locator('.cell[aria-label^="Attribute Datum_dd-mm in"]')).toHaveCount(1)
   await expect(page.locator('.cell[aria-label^="Attribute Αριθμός_πελάτη in"]')).toHaveCount(1)
-  await expect(list.getByRole('button', { name: 'Datum (dd-mm)', exact: true })).toBeVisible()
+
+  // Typing a field filters as it goes, as a name does.
+  await page.getByLabel('New field').pressSequentially('Klant nr. (€)')
+  await expect(page.getByLabel('New field')).toHaveValue('Klant_nr_') // the trailing underscore goes when it is added
+  await page.getByLabel('New field').press('Enter')
+  await expect(list.getByRole('button', { name: 'Klant_nr', exact: true })).toBeVisible()
 
   // Typing a name: spaces become underscores, characters that are not allowed do not appear; on Enter, repeated
   // underscores become one.

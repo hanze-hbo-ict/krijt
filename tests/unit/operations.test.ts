@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { addSourceFields } from '../../src/commands/builders'
 import type { Id } from '../../src/model/types'
-import { HISTORY_LIMIT, initialState, NO_ATTRIBUTES_MESSAGE, reducer, type Action, type AppState } from '../../src/state/appState'
+import { HISTORY_LIMIT, initialState, reducer, type Action, type AppState } from '../../src/state/appState'
 import { resolveCanvasClick, type CanvasTarget } from '../../src/state/interaction'
 
 function run(state: AppState, ...actions: (Action | null)[]): AppState {
@@ -98,13 +98,13 @@ describe('Milestone 2 acceptance (state level)', () => {
 })
 
 describe('move and copy', () => {
-  it('start from the selection and go straight to the destination; without one they explain', () => {
+  it('start from the selection and go straight to the destination; without one they do nothing', () => {
     let s = withTable(['a', 'b'])
     s = click(s, cellOf(s, 'a'))
     expect(run(s, { type: 'startAttributes', kind: 'copy' }).ui).toMatchObject({ operation: { kind: 'copy' }, selection: { kind: 'attributes' } })
     const none = run(withTable(['a']), { type: 'startAttributes', kind: 'move' })
     expect(none.ui.operation).toEqual({ kind: 'select' })
-    expect(none.ui.message?.text).toBe(NO_ATTRIBUTES_MESSAGE)
+    expect(none.ui.message).toBeNull()
   })
 
   it('a cell edge chooses the insertion point', () => {
@@ -136,7 +136,7 @@ describe('move and copy', () => {
     s = click(s, EMPTY, { x: 0, y: 300 })
     expect(attrNames(s)).toEqual([['c', 'd'], ['a', 'b']])
     expect(s.ui.selection).toEqual({ kind: 'attributes', attributeIds: [a, b] })
-    expect(s.ui.message?.text).toMatch(/Moved b along/)
+    expect(s.ui.message).toBeNull() // the move is visible; nothing is reported
   })
 
   it('copy selects the new copies afterwards', () => {

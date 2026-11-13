@@ -197,13 +197,16 @@ test('a connector is selected by clicking it, and deleted with the button or Del
   await expect(references(page)).toHaveCount(0)
 })
 
-test('impossible references are explained, Escape cancels, and deleting an attribute removes its reference', async ({ page }) => {
+test('impossible targets are blocked, Escape cancels, and deleting an attribute removes its reference', async ({ page }) => {
   await setup(page)
   await referenceFrom(page, [cellIn(table(page, 0), 'klantnr')])
+  // The foreign key itself is no target: a not-allowed cursor, and a click does nothing.
+  await cellIn(table(page, 0), 'klantnr').hover()
+  await expect(page.locator('.canvas')).toHaveAttribute('data-blocked', 'true')
   await cellIn(table(page, 0), 'klantnr').click()
-  await expect(page.getByRole('alert')).toContainText('cannot refer to itself')
-  await page.keyboard.press('Escape') // ends the operation (and its message); the selection stays
   await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(action(page, 'Reference')).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Escape') // ends the operation; the selection stays
   await expect(action(page, 'Reference')).toHaveAttribute('aria-pressed', 'false')
   await expect(references(page)).toHaveCount(0)
 
@@ -213,7 +216,6 @@ test('impossible references are explained, Escape cancels, and deleting an attri
   await clickEmpty(page)
   await cellIn(table(page, 1), 'klantnr').click()
   await page.keyboard.press('Delete')
-  await expect(page.getByRole('status').filter({ hasText: 'Deleted 1 attribute and 1 reference that used it.' })).toBeVisible()
   await expect(references(page)).toHaveCount(0)
   await page.keyboard.press('ControlOrMeta+z')
   await expect(references(page)).toHaveCount(1)
@@ -250,9 +252,19 @@ test('a composite end moves as a unit, and can be reordered inside with ← →'
   await cellIn(table(page, 3), 'regelnr').click()
   await action(page, 'Move').click()
   await canvas(page).click({ position: { x: 600, y: 560 } })
-  await expect(page.getByRole('status').filter({ hasText: 'Moved ordernr along, to keep the reference together.' })).toBeVisible()
   await expect(relations(page)).toHaveCount(5)
   expect(await names(3)).toEqual(['levnr'])
   expect(await names(4)).toEqual(['regelnr', 'ordernr'])
   expect((await attachments(page))[0]!.braces).toBe(2)
+})
+
+test('Reference is offered only for attributes that are side by side', async ({ page }) => {
+  await setup(page)
+  await cellIn(table(page, 2), 'ordernr').click()
+  await action(page, 'Add to selection').click()
+  await cellIn(table(page, 2), 'aantal').click()
+  await expect(action(page, 'Reference')).toBeDisabled()
+  await expect(action(page, 'Reference')).toHaveAttribute('data-tooltip', 'Reference: select attributes that are side by side')
+  await cellIn(table(page, 2), 'regelnr').click()
+  await expect(action(page, 'Reference')).toBeEnabled()
 })

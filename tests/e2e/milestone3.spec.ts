@@ -264,7 +264,6 @@ test('Reference is offered only for attributes that are side by side', async ({ 
   await action(page, 'Add to selection').click()
   await cellIn(table(page, 2), 'aantal').click()
   await expect(action(page, 'Reference')).toBeDisabled()
-  await expect(action(page, 'Reference')).toHaveAttribute('data-tooltip', 'Reference: select attributes that are side by side')
   await cellIn(table(page, 2), 'regelnr').click()
   await expect(action(page, 'Reference')).toBeEnabled()
 })

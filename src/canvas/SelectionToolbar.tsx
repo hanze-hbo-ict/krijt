@@ -240,7 +240,6 @@ function AttributeActions({ state, dispatch }: ActionProps) {
         {...operation('reference', { type: 'startReference' })}
         // A reference end is side by side in its table: offer it only for such a selection.
         disabled={(busy && op !== 'reference') || !adjacent}
-        tooltip={adjacent ? undefined : 'Reference: select attributes that are side by side'}
       >
         <Icon name="reference" />
       </ToolButton>

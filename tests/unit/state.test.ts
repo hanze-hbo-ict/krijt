@@ -227,6 +227,10 @@ describe('field selection', () => {
     expect(s.ui.selectedFieldIds).toEqual([])
     expect(s.ui.multiSelectFields).toBe(false)
 
+    // Escape clears the field selection too.
+    s = run(s, { type: 'selectField', fieldId: b! }, { type: 'cancel' })
+    expect(s.ui.selectedFieldIds).toEqual([])
+
     // While placing, the fields stay selected.
     s = run(s, { type: 'selectField', fieldId: b! }, { type: 'startPlace' }, { type: 'ui', patch: { selection: table } })
     expect(s.ui.selectedFieldIds).toEqual([b])

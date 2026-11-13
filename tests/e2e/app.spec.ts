@@ -136,9 +136,14 @@ test('ticks are a marker only, with a mixed state, and survive a reload', async 
   await expect(fieldList(page).getByRole('button', { name: /\(ticked\)$/ })).toHaveCount(0)
   await fieldTool(page, 'Tick').click()
 
-  // Escape on a focused field clears the field selection.
+  // Escape clears the field selection, and Delete works without a focused field (as after a click in Safari).
   await page.keyboard.press('Escape')
   await expect(fieldTools(page)).toHaveCount(0)
+  await field(page, 'c').click()
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  await page.keyboard.press('Delete')
+  await expect(fieldList(page).getByRole('listitem')).toHaveCount(2)
+  await page.keyboard.press('ControlOrMeta+z')
   await page.reload()
   await expect(fieldList(page).getByRole('button', { name: /\(ticked\)$/ })).toHaveCount(2)
 })

@@ -146,6 +146,13 @@ export function App() {
         return
       }
       if (op.kind !== 'select') return
+      // Selected form fields. (A focused field handles this itself; Safari and Firefox on macOS do not focus a clicked
+      // button, so the key arrives here.)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && s.ui.selectedFieldIds.length > 0) {
+        e.preventDefault()
+        dispatch({ type: 'command', command: { type: 'deleteSourceFields', fieldIds: s.ui.selectedFieldIds } })
+        return
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && attrs.length > 0) {
         e.preventDefault()
         dispatch({ type: 'command', command: { type: 'deleteAttributes', attributeIds: attrs } })

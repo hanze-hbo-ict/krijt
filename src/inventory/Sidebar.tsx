@@ -132,7 +132,8 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
     if (ids.length > 0) dispatch({ type: 'command', command: { type: 'deleteSourceFields', fieldIds: ids } })
   }
 
-  // Keys on a focused field or the field toolbar: Delete removes the selected fields, Escape clears the selection.
+  // Delete on a focused field or the field toolbar removes the selected fields. (The global shortcuts skip focused
+  // buttons; they handle Delete when nothing is focused, and Escape everywhere.)
   const onListKeyDown = (e: ReactKeyboardEvent) => {
     const s = stateRef.current
     if (e.ctrlKey || e.metaKey || e.altKey || s.ui.operation.kind !== 'select' || s.ui.selectedFieldIds.length === 0) return
@@ -140,10 +141,6 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
     if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault()
       deleteSelected()
-    } else if (e.key === 'Escape') {
-      // Handled here, so the global Escape (which clears the diagram selection) does not run as well.
-      e.preventDefault()
-      dispatch({ type: 'ui', patch: { selectedFieldIds: [] } })
     }
   }
 

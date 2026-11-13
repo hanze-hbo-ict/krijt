@@ -113,7 +113,7 @@ export type Action =
   | { type: 'startAttributes'; kind: 'move' | 'copy' }
   /** Reference in the toolbar: the selected attributes become the foreign key; choose the referenced attributes next. */
   | { type: 'startReference' }
-  /** Escape / Cancel: close an edit, end the operation, or clear the selection. */
+  /** Escape / Cancel: close an edit, end the operation, or clear the selection (of diagram items or fields). */
   | { type: 'cancel' }
   | { type: 'undo' }
   | { type: 'redo' }
@@ -271,6 +271,7 @@ function step(state: AppState, action: Action): AppState {
       if (ui.operation.kind !== 'select') return { ...state, ui: { ...ui, operation: SELECT, message: null } }
       if (ui.message) return { ...state, ui: { ...ui, message: null } }
       if (ui.selection.kind !== 'none') return { ...state, ui: { ...ui, selection: NO_SELECTION, multiSelect: false } }
+      if (ui.selectedFieldIds.length > 0) return { ...state, ui: { ...ui, selectedFieldIds: [], multiSelectFields: false } }
       return state
     }
     case 'undo': {

@@ -91,8 +91,8 @@ operation needs a modifier key.
 - **Rendering**: one attribute per end gives a plain orthogonal arrow from the foreign key to the referenced cell; a
   composite reference gets a curly brace at **both** ends and one arrow between the brace tips. (A brace that spans
   non-member cells, possible only in sessions from before ends became units, marks its members with dots.)
-- **Selecting** a connector (click it, or Enter on it with the keyboard) highlights both ends (dashed amber: foreign
-  key; solid teal: referenced) and offers **Delete reference** (also Del). Connectors have a 14px invisible hit
+- **Selecting** a connector (click it, or Enter on it with the keyboard) highlights both ends with a dashed blue frame
+  (no fill) and offers **Delete reference** (also Del). Connectors have a 14px invisible hit
   stroke and win over tables underneath; while any operation runs they are click-through.
 - Connectors follow their cells by attribute ID when tables move (also during a drag), attributes are reordered,
   renamed or moved together to another table. Deleting an attribute or table deletes its references in the same undo
@@ -106,7 +106,9 @@ underscores become one and outer ones are dropped; typed dashes stay: `Datum (dd
 
 **Tables**: click the header band to select; **Name table / Rename table** (empty = unnamed), **Add attribute**, **Move
 table** and **Copy table** (then click where it goes; the copy has no name and no references), **Delete table**. Tables also move by dragging the header band or with
-the arrow keys.
+the arrow keys. While a table is dragged or placed (also a new table made from fields or attributes), it snaps
+so its edges line up with other tables', and so a reference to a table above or below it runs straight; dashed guides
+show what it lined up with. Hold Shift to move freely.
 
 **Undo / redo**: buttons in the header, Ctrl/⌘+Z and Ctrl/⌘+Shift+Z (or Ctrl+Y). Every document change is one step,
 including layout: a multi-attribute move with its empty-table removal is one step, and consecutive arrow-key nudges of a
@@ -125,7 +127,7 @@ diagram and says so.
 
 - **Copy as image** puts a PNG of the diagram on the clipboard: tables, notation, table names, connectors and braces in
   dark ink on opaque white, cropped to the content plus a 24-unit margin, at 2× (smaller only for very large
-  diagrams, within browser canvas limits). No grid, header bands, grips, + cells, selection or end marks. Success is
+  diagrams, within browser canvas limits). No header bands, grips, + cells, selection or end marks. Success is
   shown only after the browser confirms the write; a blocked, unsupported or insecure clipboard, or a failed render,
   gives a specific message and nothing claims success. There is no download fallback. Disabled while there are no
   tables.

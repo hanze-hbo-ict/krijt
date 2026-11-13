@@ -49,7 +49,7 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
         dragging = sel.includes(fieldId) ? [...sel] : [fieldId]
       }
       onGhost({ text: dragging.length === 1 ? 'Place 1 field' : `Place ${dragging.length} fields`, x: ev.clientX, y: ev.clientY })
-      canvasHandle.current?.previewAt(ev.clientX, ev.clientY, dragging.length)
+      canvasHandle.current?.previewAt(ev.clientX, ev.clientY, dragging, ev.shiftKey)
     }
     const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove)
@@ -60,7 +60,7 @@ export function Sidebar({ state, dispatch, canvasHandle, onGhost }: Props) {
       setTimeout(() => (suppressClick.current = false), 0)
       onGhost(null)
       canvasHandle.current?.clearPreview()
-      const hit = canvasHandle.current?.hitTest(ev.clientX, ev.clientY)
+      const hit = canvasHandle.current?.hitTest(ev.clientX, ev.clientY, dragging, ev.shiftKey)
       if (!hit) return
       const action = placeAction(stateRef.current, dragging, hit.target, hit.point)
       if (action) dispatch(action)

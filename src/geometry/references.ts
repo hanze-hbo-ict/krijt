@@ -20,7 +20,7 @@
  * referenced end.
  */
 import type { Id, Point, Reference, ReferenceEnd } from '../model/types'
-import { unionRects, type Rect, type RelationLayout } from './layout'
+import { METRICS, unionRects, type Rect, type RelationLayout } from './layout'
 
 export const REFERENCE_METRICS = {
   /** Gap between the strip edge and a brace. */
@@ -39,6 +39,16 @@ export const REFERENCE_METRICS = {
 } as const
 
 type Side = 'top' | 'bottom'
+
+/**
+ * Whether a strip whose bottom is at `upperBottom` lies far enough above one whose top is at `lowerTop` for a
+ * connector to run straight down between them (clear of the lower strip's header band, with room for braces).
+ */
+export function stacked(upperBottom: number, lowerTop: number): boolean {
+  const M = REFERENCE_METRICS
+  const lowerHeader = lowerTop - METRICS.headerHeight - METRICS.headerGap
+  return lowerHeader - (upperBottom + M.braceGap + M.braceDepth) >= 2 * M.clearance
+}
 
 export type ReferenceGeometry = {
   referenceId: Id
@@ -112,6 +122,11 @@ function endAnchor(layout: RelationLayout, end: ReferenceEnd, side: Side, tipX?:
   }
 }
 
+/** Where a connector meets this end when nothing shifts it: the middle of the cell, or of the brace. */
+export function endCentreX(layout: RelationLayout, end: ReferenceEnd): number | null {
+  return endAnchor(layout, end, 'bottom')?.point.x ?? null
+}
+
 function arrowPath(tip: Point, from: Point): string {
   const M = REFERENCE_METRICS
   const dx = tip.x - from.x
@@ -148,13 +163,10 @@ function referenceGeometry(ref: Reference, layouts: Map<Id, RelationLayout>, run
   const t = layouts.get(ref.to.relationId)
   if (!s || !t) return null
   const M = REFERENCE_METRICS
-  const reach = M.braceGap + M.braceDepth
-  const sBottom = s.y + s.height
-  const tBottom = t.y + t.height
   // Above a strip lies its header band (handle and name); a run between two strips stays clear of it.
   const self = ref.from.relationId === ref.to.relationId
-  const below = !self && t.header.y - (sBottom + reach) >= 2 * M.clearance
-  const above = !self && s.header.y - (tBottom + reach) >= 2 * M.clearance
+  const below = !self && stacked(s.y + s.height, t.y)
+  const above = !self && stacked(t.y + t.height, s.y)
 
   let sideS: Side
   let sideT: Side

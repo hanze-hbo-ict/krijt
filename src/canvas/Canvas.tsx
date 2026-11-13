@@ -19,14 +19,15 @@ import {
   type MutableRefObject,
   type PointerEvent,
 } from 'react'
-import { addAttributesFromNames } from '../commands/builders'
-import { orderAttributeIds } from '../commands/commands'
+import { addAttributesFromNames, orderedFieldLabels } from '../commands/builders'
+import { expandToUnits, orderAttributeIds } from '../commands/commands'
 import { InlineInput } from '../components/InlineInput'
 import { toValidName, typedName } from '../model/names'
-import { contentBounds, layoutRelation, METRICS, type RelationLayout, type TextMeasurer } from '../geometry/layout'
-import { layoutReferences, polylinePath, type ReferenceGeometry } from '../geometry/references'
+import { contentBounds, layoutRelation, METRICS, type Rect, type RelationLayout, type TextMeasurer } from '../geometry/layout'
+import { endCentreX, layoutReferences, polylinePath, type ReferenceGeometry } from '../geometry/references'
+import { snapMove, type SnapConnector, type SnapGuide } from '../geometry/snap'
 import { fitToBounds, panBy, screenToWorld, zoomAt, type Viewport } from '../geometry/viewport'
-import type { Id, Point, Reference } from '../model/types'
+import { newAttribute, type Attribute, type Id, type Point, type Reference } from '../model/types'
 import { selectedAttributeIds, type Action, type AppState } from '../state/appState'
 import {
   choosingDestination,
@@ -44,16 +45,22 @@ import { SelectionToolbar, type ToolbarAnchor } from './SelectionToolbar'
 
 /** Screen pixels a pointer must travel before a press becomes a drag. */
 export const DRAG_THRESHOLD = 6
+/** Screen pixels within which a dragged table snaps into alignment; guides reach this far (world units) past the tables. */
+const SNAP_DISTANCE = 6
+const SNAP_OVERHANG = 12
 const ZOOM_STEP = 1.2
 
 export type DragGhost = { text: string; x: number; y: number } | null
 
 /** What the sidebar needs from the canvas to drop form fields onto it. */
 export interface CanvasHandle {
-  /** The target under a screen point, or null if the point is not over the diagram. */
-  hitTest(clientX: number, clientY: number): { target: CanvasTarget; point: Point } | null
-  /** Shows (or clears) the destination preview for an outside drag of `count` items. */
-  previewAt(clientX: number, clientY: number, count: number): void
+  /**
+   * The target under a screen point, or null if the point is not over the diagram. On empty canvas the point is
+   * nudged so the new table made from `fieldIds` lines up with other tables, unless `free` (Shift is held).
+   */
+  hitTest(clientX: number, clientY: number, fieldIds?: Id[], free?: boolean): { target: CanvasTarget; point: Point } | null
+  /** Shows (or clears) the destination preview for an outside drag of the form fields `fieldIds`. */
+  previewAt(clientX: number, clientY: number, fieldIds: Id[], free: boolean): void
   clearPreview(): void
   zoomIn(): void
   zoomOut(): void
@@ -90,10 +97,21 @@ function targetFrom(el: Element | null, clientX?: number): CanvasTarget {
 
 type Press = { pointerId: number; start: Point; target: CanvasTarget }
 type Drag =
-  | { kind: 'table'; relationId: Id; dx: number; dy: number }
+  | { kind: 'table'; relationId: Id; dx: number; dy: number; guides: SnapGuide[] }
   | { kind: 'attributes'; attributeIds: Id[] }
 /** `external`: the hover comes from a drag that started outside the canvas (the sidebar). */
-type Hover = { target: CanvasTarget; point: Point; count: number; external?: boolean }
+type Hover = {
+  target: CanvasTarget
+  point: Point
+  count: number
+  external?: boolean
+  /** Alignment guides for where a table would land. */
+  guides?: SnapGuide[]
+  /** The width a new table made here would have. */
+  newWidth?: number
+}
+/** What would become a new table on empty canvas: form fields being placed, or attributes being moved or copied. */
+type NewTableSource = { fields: Id[] } | { attributes: Id[]; move: boolean }
 
 export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props) {
   const { doc, ui } = state
@@ -176,10 +194,13 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
   }
 
   useImperativeHandle(handleRef, () => ({
-    hitTest,
-    previewAt(clientX, clientY, count) {
+    hitTest(clientX, clientY, fieldIds, free = false) {
       const hit = hitTest(clientX, clientY)
-      setHover(hit ? { ...hit, count, external: true } : null)
+      return hit && fieldIds ? { ...hit, point: snapNewTable(hit.target, hit.point, { fields: fieldIds }, free).point } : hit
+    },
+    previewAt(clientX, clientY, fieldIds, free) {
+      const hit = hitTest(clientX, clientY)
+      setHover(hit ? { ...hit, ...snapNewTable(hit.target, hit.point, { fields: fieldIds }, free), count: fieldIds.length, external: true } : null)
     },
     clearPreview() {
       setHover(null)
@@ -221,6 +242,113 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     press.current = { pointerId: e.pointerId, start: { x: e.clientX, y: e.clientY }, target: targetFrom(e.target as Element, e.clientX) }
   }
 
+  // A dragged table snaps into alignment with other tables' edges and centres; Shift moves it freely.
+  const lastPointer = useRef<Point | null>(null)
+  const strip = (l: RelationLayout) => ({ x: l.x, y: l.y, width: l.stripWidth, height: l.height })
+  const others = (except?: Id) => [...layouts.values()].filter((l) => l.relationId !== except).map(strip)
+  /** The references of table `id` to other tables, as connectors that may snap straight; `shift` moves its ends. */
+  const connectorsOf = (id: Id, shift = 0): SnapConnector[] => {
+    const own = layouts.get(id)
+    if (!own) return []
+    return stateRef.current.doc.references.flatMap((ref) => {
+      if (ref.from.relationId === ref.to.relationId) return []
+      const [mine, theirs] = ref.from.relationId === id ? [ref.from, ref.to] : ref.to.relationId === id ? [ref.to, ref.from] : [null, null]
+      if (!mine || !theirs) return []
+      const other = layouts.get(theirs.relationId)
+      const at = endCentreX(own, mine)
+      const to = other ? endCentreX(other, theirs) : null
+      return other && at !== null && to !== null ? [{ at: at + shift, to, other: strip(other) }] : []
+    })
+  }
+  const snapAt = (box: Rect, point: Point, except?: Id, connectors: SnapConnector[] = []) => {
+    const r = snapMove(box, 0, 0, others(except), SNAP_DISTANCE / stateRef.current.ui.viewport.zoom, connectors)
+    return { point: { x: point.x + r.dx, y: point.y + r.dy }, guides: r.guides }
+  }
+  /** The strip width of a new table made from `src`, measured as it will be laid out. */
+  const newTableWidth = (src: NewTableSource): number => {
+    const doc = stateRef.current.doc
+    let attributes: Attribute[]
+    if ('fields' in src) {
+      const names = orderedFieldLabels(doc, src.fields).map(toValidName).filter((n) => n !== '')
+      attributes = names.map((n, i) => newAttribute(`new-${i}`, n))
+    } else {
+      const ids = new Set(src.move ? expandToUnits(doc, src.attributes) : src.attributes)
+      attributes = doc.relations.flatMap((r) => r.attributes.filter((a) => ids.has(a.id)))
+    }
+    return layoutRelation({ id: 'new', name: null, position: { x: 0, y: 0 }, attributes }, measurer).stripWidth
+  }
+  /** On empty canvas: the point nudged so the new table made from `src` lines up (unless `free`), its guides and width. */
+  const snapNewTable = (target: CanvasTarget, point: Point, src: NewTableSource | null, free: boolean) => {
+    if (!src || (target.kind !== 'empty' && target.kind !== 'reference')) return { point, guides: [] }
+    const width = newTableWidth(src)
+    const at = newTablePosition(point)
+    const snapped = free ? { point, guides: [] } : snapAt({ x: at.x, y: at.y, width, height: METRICS.cellHeight }, point)
+    return { ...snapped, newWidth: width }
+  }
+  /** What a click in the current operation would turn into a new table on empty canvas. */
+  const clickSource = (s: AppState): NewTableSource | null => {
+    const kind = choosingDestination(s)
+    if (kind === 'place') return { fields: s.ui.selectedFieldIds }
+    if (kind === 'move' || kind === 'copy') return { attributes: selectedAttributeIds(s.ui), move: kind === 'move' }
+    return null
+  }
+  /** Where a click at `point` lands: snapped for Move/Copy table and for new tables, unless `free`. */
+  const snapClick = (target: CanvasTarget, point: Point, free: boolean): { point: Point; guides: SnapGuide[]; newWidth?: number } => {
+    const s = stateRef.current
+    const op = s.ui.operation
+    if (op.kind === 'moveTable' || op.kind === 'copyTable') {
+      const own = layouts.get(op.relationId)
+      if (free || !own) return { point, guides: [] }
+      const at = newTablePosition(point)
+      // A copy may line up with its original, but has no references; a moved table lines up with the others.
+      const box = { ...strip(own), x: at.x, y: at.y }
+      if (op.kind === 'copyTable') return snapAt(box, point)
+      return snapAt(box, point, op.relationId, connectorsOf(op.relationId, at.x - own.x))
+    }
+    return snapNewTable(target, point, clickSource(s), free)
+  }
+  const previewAt = (target: CanvasTarget, clientX: number, clientY: number, free: boolean) => {
+    const s = stateRef.current
+    const count = s.ui.operation.kind === 'place' ? s.ui.selectedFieldIds.length : selectedAttributeIds(s.ui).length
+    setHover({ target, ...snapClick(target, toWorld(clientX, clientY), free), count: Math.max(count, 1) })
+  }
+  const dragAttributesTo = (active: Extract<Drag, { kind: 'attributes' }>, clientX: number, clientY: number, free: boolean) => {
+    const hit = hitTest(clientX, clientY)
+    const src = { attributes: active.attributeIds, move: true }
+    setHover(hit ? { ...hit, ...snapNewTable(hit.target, hit.point, src, free), count: active.attributeIds.length } : null)
+  }
+  const dragTableTo = (active: Extract<Drag, { kind: 'table' }>, p: Press, clientX: number, clientY: number, free: boolean) => {
+    const s = stateRef.current
+    const zoom = s.ui.viewport.zoom
+    const dx = (clientX - p.start.x) / zoom
+    const dy = (clientY - p.start.y) / zoom
+    const own = layouts.get(active.relationId)
+    if (free || !own) return setDrag({ ...active, dx, dy, guides: [] })
+    setDrag({ ...active, ...snapMove(strip(own), dx, dy, others(active.relationId), SNAP_DISTANCE / zoom, connectorsOf(active.relationId)) })
+  }
+  // Pressing or releasing Shift mid-move switches snapping without waiting for the pointer to move.
+  const snapping = drag !== null || choosingDestination(state) !== null || ui.operation.kind === 'moveTable' || ui.operation.kind === 'copyTable'
+  useEffect(() => {
+    if (!snapping) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Shift') return
+      const active = dragRef.current
+      const p = press.current
+      const at = lastPointer.current
+      const free = e.type === 'keydown'
+      if (!at) return
+      if (active?.kind === 'table' && p) dragTableTo(active, p, at.x, at.y, free)
+      else if (active?.kind === 'attributes') dragAttributesTo(active, at.x, at.y, free)
+      else if (hover && !hover.external) previewAt(hover.target, at.x, at.y, free)
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKey)
+    }
+  })
+
   const onPointerMove = (e: PointerEvent<SVGSVGElement>) => {
     const s = stateRef.current
     const p = press.current
@@ -229,7 +357,7 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
       if (Math.hypot(e.clientX - p.start.x, e.clientY - p.start.y) >= DRAG_THRESHOLD) {
         const t = p.target
         let started: Drag | null = null
-        if (t.kind === 'relation' || t.kind === 'relationName') started = { kind: 'table', relationId: t.relationId, dx: 0, dy: 0 }
+        if (t.kind === 'relation' || t.kind === 'relationName') started = { kind: 'table', relationId: t.relationId, dx: 0, dy: 0, guides: [] }
         else if (t.kind === 'attribute') {
           // Dragging a selected cell drags the whole selection; otherwise just that cell.
           const sel = selectedAttributeIds(s.ui)
@@ -244,21 +372,21 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     }
     const active = dragRef.current
     if (active?.kind === 'table' && p) {
-      const zoom = s.ui.viewport.zoom
-      setDrag({ ...active, dx: (e.clientX - p.start.x) / zoom, dy: (e.clientY - p.start.y) / zoom })
+      lastPointer.current = { x: e.clientX, y: e.clientY }
+      dragTableTo(active, p, e.clientX, e.clientY, e.shiftKey)
       return
     }
     if (active?.kind === 'attributes') {
       const n = active.attributeIds.length
       onGhost({ text: n === 1 ? 'Move 1 attribute' : `Move ${n} attributes`, x: e.clientX, y: e.clientY })
-      const hit = hitTest(e.clientX, e.clientY)
-      setHover(hit ? { ...hit, count: n } : null)
+      lastPointer.current = { x: e.clientX, y: e.clientY }
+      dragAttributesTo(active, e.clientX, e.clientY, e.shiftKey)
       return
     }
     // Preview of what a click would do: a destination, a reference, or a table's new place.
     if (previewing(s)) {
-      const count = s.ui.operation.kind === 'place' ? s.ui.selectedFieldIds.length : selectedAttributeIds(s.ui).length
-      setHover({ target: targetFrom(e.target as Element, e.clientX), point: toWorld(e.clientX, e.clientY), count: Math.max(count, 1) })
+      lastPointer.current = { x: e.clientX, y: e.clientY }
+      previewAt(targetFrom(e.target as Element, e.clientX), e.clientX, e.clientY, e.shiftKey)
     } else if (hover) setHover(null)
   }
 
@@ -284,7 +412,8 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
           })
       } else {
         const hit = hitTest(e.clientX, e.clientY)
-        const action = hit && transferAction(s, 'move', d.attributeIds, hit.target, hit.point)
+        const point = hit && snapNewTable(hit.target, hit.point, { attributes: d.attributeIds, move: true }, e.shiftKey).point
+        const action = hit && point && transferAction(s, 'move', d.attributeIds, hit.target, point)
         if (action) dispatch(action)
       }
       return
@@ -292,7 +421,7 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     if (cancelled) return
     // A press that wandered off (beyond the threshold) without being a drag is not a click.
     if (Math.hypot(e.clientX - p.start.x, e.clientY - p.start.y) >= DRAG_THRESHOLD) return
-    activate(p.target, toWorld(e.clientX, e.clientY), e.shiftKey)
+    activate(p.target, snapClick(p.target, toWorld(e.clientX, e.clientY), e.shiftKey).point, e.shiftKey)
   }
 
   const onKeyDown = (e: KeyboardEvent<SVGSVGElement>) => {
@@ -361,8 +490,8 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
   // Cells of the reference being created, or of the selected reference; composite ends are numbered left to right.
   const marks = useMemo(() => {
     const map = new Map<Id, CellMark>()
-    const mark = (ids: Id[], role: CellMark['role'], numbered: boolean) =>
-      orderAttributeIds(doc, ids).forEach((id, i) => map.set(id, numbered ? { role, index: i + 1 } : { role }))
+    const mark = (ids: Id[], role: CellMark['role'], numbered: boolean, viewing = false) =>
+      orderAttributeIds(doc, ids).forEach((id, i) => map.set(id, { role, viewing, ...(numbered ? { index: i + 1 } : {}) }))
     if (op.kind === 'reference') {
       const numbered = op.source.length > 1
       mark(op.source, 'source', numbered)
@@ -371,8 +500,8 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
       const ref = doc.references.find((r) => r.id === selection.referenceId)
       if (ref) {
         const numbered = ref.from.attributeIds.length > 1
-        mark(ref.from.attributeIds, 'source', numbered)
-        mark(ref.to.attributeIds, 'target', numbered)
+        mark(ref.from.attributeIds, 'source', numbered, true)
+        mark(ref.to.attributeIds, 'target', numbered, true)
       }
     }
     return map
@@ -436,7 +565,6 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
     return null
   })()
 
-  const grid = 20 * viewport.zoom
   const preview = hover && hover.count > 0 && (destinationMode || hover.external) ? destinationFor(doc, hover.target, hover.point) : null
 
   return (
@@ -456,12 +584,7 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
         onBlur={() => !dragRef.current && setHover(null)}
         onDoubleClick={onDoubleClick}
       >
-        <defs>
-          <pattern id="krijt-grid" width={grid} height={grid} x={viewport.x} y={viewport.y} patternUnits="userSpaceOnUse">
-            <circle cx={1} cy={1} r={1} className="grid-dot" />
-          </pattern>
-        </defs>
-        <rect className="canvas-background" data-kind="empty" width="100%" height="100%" fill="url(#krijt-grid)" />
+        <rect className="canvas-background" data-kind="empty" width="100%" height="100%" fill="transparent" />
         <g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.zoom})`}>
           {doc.relations.map((r) => {
             const dragged = drag?.kind === 'table' && drag.relationId === r.id
@@ -494,8 +617,15 @@ export function Canvas({ state, dispatch, measurer, handleRef, onGhost }: Props)
               />
             ))}
           </g>
-          {preview && <DestinationPreview intent={preview} layouts={layouts} count={hover!.count} />}
+          {preview && <DestinationPreview intent={preview} layouts={layouts} count={hover!.count} newWidth={hover!.newWidth} />}
           {referencePreview?.geometry && <ReferencePreview geometry={referencePreview.geometry} />}
+          {(drag?.kind === 'table' ? drag.guides : (hover?.guides ?? [])).map((g) =>
+              g.axis === 'x' ? (
+                <line key={`x${g.x}`} className="snap-guide" x1={g.x} x2={g.x} y1={g.y1 - SNAP_OVERHANG} y2={g.y2 + SNAP_OVERHANG} />
+              ) : (
+                <line key={`y${g.y}`} className="snap-guide" x1={g.x1 - SNAP_OVERHANG} x2={g.x2 + SNAP_OVERHANG} y1={g.y} y2={g.y} />
+              ),
+            )}
           {(op.kind === 'moveTable' || op.kind === 'copyTable') && hover && <TablePreview layout={layouts.get(op.relationId)} point={hover.point} />}
         </g>
       </svg>
@@ -593,14 +723,17 @@ function DestinationPreview({
   intent,
   layouts,
   count,
+  newWidth,
 }: {
   intent: NonNullable<ReturnType<typeof destinationFor>>
   layouts: Map<string, RelationLayout>
   count: number
+  /** The new table's real width, when known. */
+  newWidth?: number
 }) {
   if (intent.kind === 'newTable') {
     const { x, y } = intent.position
-    const width = Math.max(90, Math.min(count, 6) * 56)
+    const width = newWidth ?? Math.max(90, Math.min(count, 6) * 56)
     return (
       <g className="preview" aria-hidden="true">
         <rect className="preview-table" x={x} y={y} width={width} height={METRICS.cellHeight} />

@@ -8,8 +8,11 @@ import type { Attribute, Id, Relation } from '../model/types'
 import { fitsInBand, labelParts, labelWidth, METRICS, type RelationLayout, type TextMeasurer } from '../geometry/layout'
 import { tableNameText } from '../model/names'
 
-/** A cell's part in a reference being created or selected; `index` numbers composite ends (1-based). */
-export type CellMark = { role: 'source' | 'target'; index?: number }
+/**
+ * A cell's part in a reference being created or selected; `index` numbers composite ends (1-based).
+ * `viewing`: the reference is selected (shown with dashed frames only), not being created.
+ */
+export type CellMark = { role: 'source' | 'target'; index?: number; viewing?: boolean }
 
 interface Props {
   relation: Relation
@@ -147,6 +150,7 @@ export const RelationView = memo(function RelationView({
             data-selected={isSel || undefined}
             data-dragged={draggedAttributeIds.has(a.id) || undefined}
             data-ref-role={mark?.role}
+            data-ref-viewing={mark?.viewing || undefined}
             role="button"
             tabIndex={0}
             aria-pressed={isSel || mark !== undefined}

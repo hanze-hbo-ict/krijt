@@ -4,7 +4,7 @@
  * It comes from the same document and the same geometry as the canvas
  * (layoutRelation, layoutReferences), but shows only the diagram: strips,
  * notation, table names, connectors and braces, in dark ink on white. No
- * header bands, grips, "+" cells, selection, end marks or grid.
+ * header bands, grips, "+" cells, selection, or end marks.
  *
  * Keeping the scene separate from painting makes it testable without a
  * browser; paint.ts draws it onto a 2D canvas.

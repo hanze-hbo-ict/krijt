@@ -97,7 +97,7 @@ test.describe('real clipboard (Chromium)', () => {
         const [r, g, b, a] = [data[i]!, data[i + 1]!, data[i + 2]!, data[i + 3]!]
         if (a < 255) transparent++
         if (r + g + b < 200) dark++
-        if (b - r > 60 || r - b > 60) colored++ // selection blue, amber/teal end marks
+        if (b - r > 60 || r - b > 60) colored++ // selection and end-mark blue
       }
       const px = (x: number, y: number) => [...data.slice((y * bitmap.width + x) * 4, (y * bitmap.width + x) * 4 + 4)]
       return { type: blob.type, width: bitmap.width, height: bitmap.height, corner: px(0, 0), dark, colored, transparent }
@@ -290,4 +290,86 @@ test('names accept letters of any script, dashes and underscores; typing a space
   await expect(input).toHaveValue('Klant_gegevens__2-a')
   await input.press('Enter')
   await expect(page.locator('.relation-name')).toHaveText('KLANT_GEGEVENS_2-A')
+})
+
+test('a dragged table snaps into alignment with other tables, unless Shift is held', async ({ page }) => {
+  await openWith(page, SAMPLE)
+  const klant = page.locator('.relation[data-relation-id="k"]')
+  const strip = () => klant.locator('.cell-box').first().boundingBox().then((b) => b!)
+  const drag = async (dx: number, dy: number, shift: boolean) => {
+    const h = (await klant.locator('.relation-header').boundingBox())!
+    await page.mouse.move(h.x + 8, h.y + h.height / 2)
+    if (shift) await page.keyboard.down('Shift')
+    await page.mouse.down()
+    await page.mouse.move(h.x + 8 + dx, h.y + h.height / 2 + dy, { steps: 6 })
+    if (!shift) await expect(page.locator('.snap-guide')).not.toHaveCount(0) // a guide line has no area, so not 'visible'
+    await page.mouse.up()
+    if (shift) await page.keyboard.up('Shift')
+  }
+  const start = await strip()
+  // 3px off the left edge shared with Order: snaps back into line, 80px down stays as dragged.
+  await drag(3, 80, false)
+  let b = await strip()
+  expect(Math.round(b.x - start.x)).toBe(0)
+  expect(Math.round(b.y - start.y)).toBe(80)
+  await expect(page.locator('.snap-guide')).toHaveCount(0)
+  // With Shift the same nudge is kept.
+  await drag(3, 40, true)
+  b = await strip()
+  expect(Math.round(b.x - start.x)).toBe(3)
+  expect(Math.round(b.y - start.y)).toBe(120)
+})
+
+test('Move table also snaps the clicked place into alignment', async ({ page }) => {
+  await openWith(page, SAMPLE)
+  const regel = page.locator('.relation[data-relation-id="r"]')
+  const order = page.locator('.relation[data-relation-id="o"] .cell-box').first()
+  const o = (await order.boundingBox())!
+  await regel.locator('.relation-header').click({ position: { x: 8, y: 12 } })
+  await page.getByRole('button', { name: 'Move table' }).click()
+  // Aim 4px right of Order's left edge, well below it: the strip lands exactly under Order.
+  await page.mouse.move(o.x + 4, o.y + 200 + o.height / 2, { steps: 4 })
+  await expect(page.locator('.snap-guide')).not.toHaveCount(0) // a guide line has no area, so not 'visible'
+  await page.mouse.click(o.x + 4, o.y + 200 + o.height / 2)
+  const b = (await regel.locator('.cell-box').first().boundingBox())!
+  expect(Math.round(b.x - o.x)).toBe(0)
+  expect(Math.round(b.y - o.y)).toBe(200)
+})
+
+test('attributes dragged to empty canvas make a new table that snaps into alignment', async ({ page }) => {
+  await openWith(page, SAMPLE)
+  const o = (await page.locator('.relation[data-relation-id="o"] .cell-box').first().boundingBox())!
+  const naam = (await page.locator('.cell[aria-label^="Attribute naam in"]').boundingBox())!
+  await page.mouse.move(naam.x + naam.width / 2, naam.y + naam.height / 2)
+  await page.mouse.down()
+  // 2px right of Order's left edge (and nearer it than any other line): the new table lines up with Order.
+  await page.mouse.move(o.x + 2, o.y + 200 + o.height / 2, { steps: 8 })
+  await expect(page.locator('.snap-guide')).not.toHaveCount(0) // a guide line has no area, so not 'visible'
+  await page.mouse.up()
+  const moved = (await page.locator('.cell[aria-label^="Attribute naam in"] .cell-box').boundingBox())!
+  expect(Math.round(moved.x - o.x)).toBe(0)
+  expect(Math.round(moved.y - o.y)).toBe(200)
+})
+
+test('a dragged table snaps so a reference to a table above it runs straight', async ({ page }) => {
+  await openWith(page, SAMPLE)
+  const fk = page.locator('.relation[data-relation-id="o"] .cell[aria-label^="Attribute klantnr in"] .cell-box')
+  const pk = page.locator('.relation[data-relation-id="k"] .cell[aria-label^="Attribute klantnr in"] .cell-box')
+  const centre = async (l: typeof fk) => {
+    const b = (await l.boundingBox())!
+    return b.x + b.width / 2
+  }
+  const offBy = (await centre(fk)) - (await centre(pk))
+  // Drag Order left until its klantnr is 3px right of Klant's: it snaps the rest of the way.
+  const h = (await page.locator('.relation[data-relation-id="o"] .relation-header').boundingBox())!
+  await page.mouse.move(h.x + 8, h.y + h.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(h.x + 8 - offBy + 3, h.y + h.height / 2, { steps: 8 })
+  await expect(page.locator('.snap-guide')).not.toHaveCount(0)
+  await page.mouse.up()
+  // Table positions are whole numbers and a cell's middle may lie half-way: within half a pixel.
+  expect(Math.abs((await centre(fk)) - (await centre(pk)))).toBeLessThanOrEqual(0.5)
+  // One straight segment from foreign key to referenced end.
+  const d = await page.locator('.reference[data-reference="x"] .reference-line').getAttribute('d')
+  expect(d!.match(/L/g)).toHaveLength(1)
 })

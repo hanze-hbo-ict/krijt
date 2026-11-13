@@ -504,9 +504,6 @@ textarea:focus-visible {
 .canvas-background {
   fill-opacity: 1;
 }
-.grid-dot {
-  fill: var(--diagram-grid);
-}
 .canvas-empty {
   position: absolute;
   inset: 0;
@@ -713,28 +710,27 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
-/* Ends of the reference being made or selected. Cells are light paper in both themes, so fixed colours.
-   Foreign key: dashed amber frame; referenced: solid teal frame. Composite ends also carry numbers. */
+/* Ends of the reference being made or selected. Cells are light paper in both themes, so the fixed
+   light-theme blue. While making one: foreign key dashed, referenced solid, both tinted. A selected
+   reference: both ends dashed, no tint. Composite ends also carry numbers. */
 .cell-ref-mark {
   fill: none;
+  stroke: #315ac6;
   stroke-width: 3;
   pointer-events: none;
 }
-.cell[data-ref-role='source'] .cell-box {
-  fill: #fff4e0;
+.cell[data-ref-role]:not([data-ref-viewing]) .cell-box {
+  fill: #e3ebff;
 }
-.cell[data-ref-role='source'] .cell-ref-mark {
-  stroke: #b45309;
+.cell[data-ref-role='source'] .cell-ref-mark,
+.cell[data-ref-viewing] .cell-ref-mark {
   stroke-dasharray: 6 3;
-}
-.cell[data-ref-role='target'] .cell-box {
-  fill: #e2f5f1;
-}
-.cell[data-ref-role='target'] .cell-ref-mark {
-  stroke: #0f766e;
 }
 .cell-ref-badge {
   pointer-events: none;
+}
+.cell-ref-badge circle {
+  fill: #315ac6;
 }
 .cell-ref-badge text {
   fill: #ffffff;
@@ -743,14 +739,15 @@ textarea:focus-visible {
   text-anchor: middle;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
-.cell[data-ref-role='source'] .cell-ref-badge circle {
-  fill: #b45309;
-}
-.cell[data-ref-role='target'] .cell-ref-badge circle {
-  fill: #0f766e;
-}
 
 /* Previews: an insertion bar, the outline of a new or moved table, a reference to be created. */
+.snap-guide {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
 .preview {
   pointer-events: none;
 }

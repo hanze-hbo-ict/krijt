@@ -9,7 +9,8 @@
 export type Id = string
 export type Point = { x: number; y: number }
 
-export type SourceField = { id: Id; label: string }
+/** A field of the original form. `ticked` is the student's own marker; absent means not ticked. */
+export type SourceField = { id: Id; label: string; ticked?: true }
 
 export type Attribute = {
   id: Id

@@ -24,8 +24,8 @@ async function clickEmpty(page: Page) {
 }
 
 async function place(page: Page, names: string[], x: number, y: number) {
-  for (const n of names) await field(page, n).click()
-  await page.getByRole('button', { name: 'Place in diagram' }).click()
+  for (const n of names) await field(page, n).click({ modifiers: ['Shift'] })
+  await page.getByRole('toolbar', { name: 'Field actions' }).getByRole('button', { name: 'Place in diagram' }).click()
   await canvas(page).click({ position: { x, y } })
   await clickEmpty(page)
 }
@@ -33,9 +33,11 @@ async function place(page: Page, names: string[], x: number, y: number) {
 /** Order(ordernr, klantnr), Klant(klantnr, naam), Regel(ordernr, regelnr, aantal), Levering(ordernr, regelnr, levnr). */
 async function setup(page: Page) {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Paste a list of fields' }).click()
-  await page.getByLabel('One field per line').fill(['ordernr', 'klantnr', 'naam', 'regelnr', 'aantal', 'levnr'].join('\n'))
-  await page.getByRole('button', { name: /^Add \d+ fields$/ }).click()
+  await page.getByLabel('New field').evaluate((el, t) => {
+    const data = new DataTransfer()
+    data.setData('text/plain', t + '\n')
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+  }, ['ordernr', 'klantnr', 'naam', 'regelnr', 'aantal', 'levnr'].join('\n'))
   await place(page, ['ordernr', 'klantnr'], 60, 80)
   await place(page, ['klantnr', 'naam'], 420, 80)
   await place(page, ['ordernr', 'regelnr', 'aantal'], 60, 230)

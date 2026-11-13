@@ -57,9 +57,11 @@ export type UiState = {
   multiSelect: boolean
   /** Selected source fields, in click order (placement uses inventory order). */
   selectedFieldIds: Id[]
+  /** "Add to selection" in the field toolbar: clicks add or remove fields. Off whenever no field is selected. */
+  multiSelectFields: boolean
   editing: Editing
   viewport: Viewport
-  sidebarWidth: number
+  sidebarCollapsed: boolean
   message: Message | null
 }
 
@@ -72,9 +74,6 @@ export type History = {
 
 export type AppState = { doc: KrijtDocument; ui: UiState; history: History }
 
-export const SIDEBAR_MIN = 200
-export const SIDEBAR_MAX = 480
-export const SIDEBAR_DEFAULT = 280
 export const HISTORY_LIMIT = 200
 
 export const NO_SELECTION: Selection = { kind: 'none' }
@@ -87,9 +86,10 @@ export function initialUi(): UiState {
     selection: NO_SELECTION,
     multiSelect: false,
     selectedFieldIds: [],
+    multiSelectFields: false,
     editing: null,
     viewport: DEFAULT_VIEWPORT,
-    sidebarWidth: SIDEBAR_DEFAULT,
+    sidebarCollapsed: false,
     message: null,
   }
 }
@@ -102,7 +102,10 @@ export type Action =
   /** Apply a document command; on success also apply `after` to the UI state. */
   | { type: 'command'; command: Command; after?: Partial<UiState>; coalesceKey?: string }
   | { type: 'ui'; patch: Partial<UiState> }
+  /** Add a field to the selection, or remove it (Shift-click, or a click with Add to selection on). */
   | { type: 'toggleField'; fieldId: Id }
+  /** A plain click: select only this field. */
+  | { type: 'selectField'; fieldId: Id }
   | { type: 'startPlace' }
   | { type: 'startMoveTable'; relationId: Id }
   | { type: 'startCopyTable'; relationId: Id }
@@ -114,8 +117,6 @@ export type Action =
   | { type: 'cancel' }
   | { type: 'undo' }
   | { type: 'redo' }
-
-export const clampSidebar = (w: number) => Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w)))
 
 export function selectedAttributeIds(ui: UiState): Id[] {
   return ui.selection.kind === 'attributes' ? ui.selection.attributeIds : []
@@ -169,13 +170,15 @@ export function reconcileUi(doc: KrijtDocument, ui: UiState): UiState {
     if (gone) editing = null
   }
   const selectedFieldIds = ui.selectedFieldIds.filter((id) => fieldIds.has(id))
+  const multiSelectFields = ui.multiSelectFields && selectedFieldIds.length > 0
   const same =
     selection === ui.selection &&
     operation === ui.operation &&
     editing === ui.editing &&
     multiSelect === ui.multiSelect &&
-    selectedFieldIds.length === ui.selectedFieldIds.length
-  return same ? ui : { ...ui, selection, operation, editing, multiSelect, selectedFieldIds }
+    selectedFieldIds.length === ui.selectedFieldIds.length &&
+    multiSelectFields === ui.multiSelectFields
+  return same ? ui : { ...ui, selection, operation, editing, multiSelect, selectedFieldIds, multiSelectFields }
 }
 
 function pushHistory(h: History, doc: KrijtDocument, key: string | null): History {
@@ -189,7 +192,29 @@ function afterTimeTravel(doc: KrijtDocument, ui: UiState): UiState {
   return reconcileUi(doc, { ...ui, operation: SELECT, editing: null, message: null })
 }
 
+/**
+ * Fields and diagram items are never selected at the same time: the newer selection wins (and Add to selection ends
+ * with the selection it belonged to). While placing, the fields stay selected: a click on the diagram then picks a
+ * destination, it does not select.
+ */
+function oneSelection(prev: UiState, next: UiState): UiState {
+  if (next.selectedFieldIds.length === 0 || next.selection.kind === 'none') return next
+  const fieldsChanged = next.selectedFieldIds !== prev.selectedFieldIds
+  const diagramChanged = next.selection !== prev.selection
+  if (diagramChanged && !fieldsChanged && next.operation.kind !== 'place')
+    return { ...next, selectedFieldIds: [], multiSelectFields: false }
+  if (fieldsChanged) return { ...next, selection: NO_SELECTION, multiSelect: false }
+  return next
+}
+
 export function reducer(state: AppState, action: Action): AppState {
+  const next = step(state, action)
+  if (next.ui === state.ui) return next
+  const ui = oneSelection(state.ui, next.ui)
+  return ui === next.ui ? next : { ...next, ui }
+}
+
+function step(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'command': {
       const result = applyCommand(state.doc, action.command)
@@ -199,16 +224,19 @@ export function reducer(state: AppState, action: Action): AppState {
       if (result.doc === state.doc) return { ...state, ui }
       return { doc: result.doc, ui, history: pushHistory(state.history, state.doc, action.coalesceKey ?? null) }
     }
-    case 'ui': {
-      const patch = { ...action.patch }
-      if (patch.sidebarWidth !== undefined) patch.sidebarWidth = clampSidebar(patch.sidebarWidth)
-      return { ...state, ui: reconcileUi(state.doc, { ...state.ui, ...patch }) }
-    }
-    case 'toggleField': {
+    case 'ui':
+      return { ...state, ui: reconcileUi(state.doc, { ...state.ui, ...action.patch }) }
+    case 'toggleField':
+    case 'selectField': {
       if (!state.doc.sourceFields.some((f) => f.id === action.fieldId)) return state
       const ids = state.ui.selectedFieldIds
-      const selectedFieldIds = ids.includes(action.fieldId) ? ids.filter((id) => id !== action.fieldId) : [...ids, action.fieldId]
-      return { ...state, ui: { ...state.ui, selectedFieldIds, message: null } }
+      const selectedFieldIds =
+        action.type === 'selectField'
+          ? [action.fieldId]
+          : ids.includes(action.fieldId)
+            ? ids.filter((id) => id !== action.fieldId)
+            : [...ids, action.fieldId]
+      return { ...state, ui: reconcileUi(state.doc, { ...state.ui, selectedFieldIds, message: null }) }
     }
     case 'startPlace':
       return { ...state, ui: { ...state.ui, operation: { kind: 'place' }, editing: null, message: null } }

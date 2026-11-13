@@ -2,7 +2,6 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Canvas, type CanvasHandle, type DragGhost } from '../canvas/Canvas'
 import { Icon } from '../components/Icon'
 import { isTypingTarget } from '../components/InlineInput'
-import { Splitter } from '../components/Splitter'
 import { createCanvasMeasurer } from '../geometry/measure'
 import { DEFAULT_VIEWPORT } from '../geometry/viewport'
 import { Sidebar } from '../inventory/Sidebar'
@@ -11,7 +10,7 @@ import { renderPng } from '../clipboard/paint'
 import { exportScale, exportScene } from '../clipboard/scene'
 import { serializeDocument } from '../model/serialize'
 import { readSession, safeSessionStorage, SAVE_DEBOUNCE_MS, saveSession, UNREADABLE_SESSION_MESSAGE } from '../persistence/session'
-import { initialState, reducer, selectedAttributeIds, SIDEBAR_MAX, SIDEBAR_MIN, type AppState } from '../state/appState'
+import { initialState, reducer, selectedAttributeIds, type AppState } from '../state/appState'
 import { DiagramHeader } from './DiagramHeader'
 import { MessageBanner } from './MessageBanner'
 import { ClearDialog } from './ClearDialog'
@@ -34,7 +33,7 @@ type SaveStatus = 'ok' | 'failed' | 'unavailable'
  */
 function isControl(target: EventTarget | null): boolean {
   if (!(target instanceof Element) || target instanceof SVGElement) return false
-  return !!target.closest('button, a, [role="button"], [role="separator"], dialog')
+  return !!target.closest('button, a, [role="button"], dialog')
 }
 
 export function App() {
@@ -61,19 +60,19 @@ export function App() {
 
   // Debounced same-tab recovery after document or layout changes.
   const { doc } = state
-  const { viewport, sidebarWidth } = state.ui
+  const { viewport, sidebarCollapsed } = state.ui
   useEffect(() => {
     if (!storage) return
-    const t = setTimeout(() => setSaveStatus(saveSession(storage, { doc, ui: { viewport, sidebarWidth } }) ? 'ok' : 'failed'), SAVE_DEBOUNCE_MS)
+    const t = setTimeout(() => setSaveStatus(saveSession(storage, { doc, ui: { viewport, sidebarCollapsed } }) ? 'ok' : 'failed'), SAVE_DEBOUNCE_MS)
     return () => clearTimeout(t)
-  }, [storage, doc, viewport, sidebarWidth])
+  }, [storage, doc, viewport, sidebarCollapsed])
 
   // Do not lose the last debounce window: save at once when the tab is hidden or the page goes away.
   useEffect(() => {
     if (!storage) return
     const flush = () => {
       const s = stateRef.current
-      saveSession(storage, { doc: s.doc, ui: { viewport: s.ui.viewport, sidebarWidth: s.ui.sidebarWidth } })
+      saveSession(storage, { doc: s.doc, ui: { viewport: s.ui.viewport, sidebarCollapsed: s.ui.sidebarCollapsed } })
     }
     const onVisibility = () => document.visibilityState === 'hidden' && flush()
     window.addEventListener('pagehide', flush)
@@ -205,15 +204,8 @@ export function App() {
         </div>
       </header>
 
-      <main className="workspace" style={{ gridTemplateColumns: `${state.ui.sidebarWidth}px 12px minmax(0, 1fr)` }}>
+      <main className={`workspace${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <Sidebar state={state} dispatch={dispatch} canvasHandle={canvasHandle} onGhost={setGhost} />
-        <Splitter
-          width={state.ui.sidebarWidth}
-          min={SIDEBAR_MIN}
-          max={SIDEBAR_MAX}
-          label="Resize form fields sidebar"
-          onChange={(w) => dispatch({ type: 'ui', patch: { sidebarWidth: w } })}
-        />
         <section className="panel diagram-panel" aria-labelledby="diagram-title">
           <DiagramHeader
             state={state}

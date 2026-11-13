@@ -15,20 +15,27 @@ const TWELVE = [
   'Subtotaal',
 ]
 
-async function pasteList(page: Page, text: string) {
-  await page.getByRole('button', { name: 'Paste a list of fields' }).click()
-  await page.getByLabel('One field per line').fill(text)
-  await page.getByRole('button', { name: /^Add \d+ fields$/ }).click()
+/** Pastes lines into the New field input: one field per line. */
+async function pasteFields(page: Page, text: string) {
+  await page.getByLabel('New field').evaluate((el, t) => {
+    const data = new DataTransfer()
+    data.setData('text/plain', t + '\n')
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+  }, text)
 }
 
 const fieldList = (page: Page) => page.getByRole('list', { name: 'Form fields' })
 const field = (page: Page, label: string) => fieldList(page).getByRole('button', { name: label, exact: true })
+const fieldTools = (page: Page) => page.getByRole('toolbar', { name: 'Field actions' })
+const fieldTool = (page: Page, name: string) => fieldTools(page).getByRole('button', { name, exact: true })
+/** Shift-click adds a field to the selection (or removes it). */
+const addField = (page: Page, label: string) => field(page, label).click({ modifiers: ['Shift'] })
 const canvas = (page: Page) => page.locator('.canvas-svg')
 const cell = (page: Page, name: string, table = 'unnamed table') => page.getByRole('button', { name: `Attribute ${name} in ${table}`, exact: true })
 
 async function placeOnCanvas(page: Page, labels: string[], position = { x: 160, y: 140 }) {
-  for (const l of labels) await field(page, l).click()
-  await page.getByRole('button', { name: 'Place in diagram' }).click()
+  for (const l of labels) await addField(page, l)
+  await fieldTool(page, 'Place in diagram').click()
   await canvas(page).click({ position })
 }
 
@@ -44,18 +51,20 @@ test.beforeEach(async ({ page }) => {
 
 test('acceptance: paste 12 fields and build an unnamed table from a subset with clicks only', async ({ page }) => {
   // Blank lines in the paste are dropped.
-  await pasteList(page, TWELVE.slice(0, 7).join('\n') + '\n\n' + TWELVE.slice(7).join('\n') + '\n')
+  await pasteFields(page, TWELVE.slice(0, 7).join('\n') + '\n\n' + TWELVE.slice(7).join('\n') + '\n')
   await expect(fieldList(page).getByRole('listitem')).toHaveCount(12)
 
-  // Click order differs from inventory order; the table follows inventory order.
+  // Click order differs from inventory order; the table follows inventory order. Add to selection makes plain
+  // clicks add fields.
   await field(page, 'Klantnaam').click()
+  await fieldTool(page, 'Add to selection').click()
   await field(page, 'Klantnummer').click()
   await field(page, 'Plaats').click()
-  await expect(page.getByText('3 selected')).toBeVisible()
+  await expect(fieldList(page).locator('[aria-pressed="true"]')).toHaveCount(3)
   await expect(field(page, 'Klantnaam')).toHaveAttribute('aria-pressed', 'true')
 
-  await page.getByRole('button', { name: 'Place in diagram' }).click()
-  await expect(page.getByRole('button', { name: 'Placing…' })).toHaveAttribute('aria-pressed', 'true')
+  await fieldTool(page, 'Place in diagram').click()
+  await expect(fieldTool(page, 'Place in diagram')).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.diagram-header [aria-live]')).toHaveText('Place 3 fields: choose a table, or empty canvas for a new table.')
   await canvas(page).click({ position: { x: 200, y: 160 } })
 
@@ -68,7 +77,8 @@ test('acceptance: paste 12 fields and build an unnamed table from a subset with 
   await expect(canvas(page)).not.toContainText(/Table\s*\d/)
   // The inventory is unchanged and the operation has ended.
   await expect(fieldList(page).getByRole('listitem')).toHaveCount(12)
-  await expect(page.getByText('No fields selected')).toBeVisible()
+  await expect(fieldList(page).locator('[aria-pressed="true"]')).toHaveCount(0)
+  await expect(fieldTools(page)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Move table' })).toBeVisible()
 })
 
@@ -90,24 +100,67 @@ test('single entry with Enter, multi-line paste into the entry, rename and remov
   await expect(field(page, 'Café')).toBeVisible()
   await expect(field(page, '<b>Één</b>')).toBeVisible() // shown as text, not HTML
 
-  await page.getByRole('button', { name: 'Rename Café' }).click()
+  await field(page, 'Café').click()
+  await fieldTool(page, 'Rename').click()
   const edit = page.getByLabel('Rename field Café')
   await edit.fill('Cafénaam')
   await edit.press('Enter')
   await expect(field(page, 'Cafénaam')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Remove Cafénaam' }).click()
+  await fieldTool(page, 'Delete').click()
+  await expect(fieldList(page).getByRole('listitem')).toHaveCount(3)
+
+  // Several at once: Rename needs a single field; Delete (or the Delete key) removes them all.
+  await field(page, 'Naam').first().click()
+  await field(page, 'Naam').last().click({ modifiers: ['Shift'] })
+  await expect(fieldTool(page, 'Rename')).toBeDisabled()
+  await page.keyboard.press('Delete')
+  await expect(fieldList(page).getByRole('listitem')).toHaveCount(1)
+  await page.keyboard.press('ControlOrMeta+z')
   await expect(fieldList(page).getByRole('listitem')).toHaveCount(3)
 })
 
+test('ticks are a marker only, with a mixed state, and survive a reload', async ({ page }) => {
+  await pasteFields(page, 'a\nb\nc')
+  await field(page, 'a').click()
+  await fieldTool(page, 'Tick').click()
+  await expect(fieldList(page).getByRole('button', { name: 'a (ticked)', exact: true })).toBeVisible()
+  await expect(fieldTool(page, 'Tick')).toHaveAttribute('aria-pressed', 'true')
+
+  // A mix: the first press ticks all, the second unticks all.
+  await field(page, 'b').click({ modifiers: ['Shift'] })
+  await expect(fieldTool(page, 'Tick')).toHaveAttribute('aria-pressed', 'mixed')
+  await fieldTool(page, 'Tick').click()
+  await expect(fieldList(page).getByRole('button', { name: /\(ticked\)$/ })).toHaveCount(2)
+  await fieldTool(page, 'Tick').click()
+  await expect(fieldList(page).getByRole('button', { name: /\(ticked\)$/ })).toHaveCount(0)
+  await fieldTool(page, 'Tick').click()
+
+  // Escape on a focused field clears the field selection.
+  await page.keyboard.press('Escape')
+  await expect(fieldTools(page)).toHaveCount(0)
+  await page.reload()
+  await expect(fieldList(page).getByRole('button', { name: /\(ticked\)$/ })).toHaveCount(2)
+})
+
+test('the form fields can be hidden and shown, and that is remembered', async ({ page }) => {
+  await pasteFields(page, 'a')
+  await page.getByRole('button', { name: 'Hide form fields' }).click()
+  await expect(fieldList(page)).toBeHidden()
+  await expect(page.getByLabel('New field')).toBeHidden()
+  await page.reload()
+  await page.getByRole('button', { name: 'Show form fields' }).click()
+  await expect(field(page, 'a')).toBeVisible()
+})
+
 test('add fields to an existing table, type attributes directly, and name the table', async ({ page }) => {
-  await pasteList(page, 'A\nB\nC')
+  await pasteFields(page, 'A\nB\nC')
   await placeOnCanvas(page, ['A'])
 
-  // Command first, then selection, then destination: an existing table's cell.
-  await page.getByRole('button', { name: 'Place in diagram' }).click()
+  // Selection, then Place, then destination: an existing table's cell.
   await field(page, 'C').click()
-  await field(page, 'B').click()
+  await addField(page, 'B')
+  await fieldTool(page, 'Place in diagram').click()
   await cell(page, 'A').click()
   await expect(page.locator('.cell')).toHaveCount(3)
   await expect(page.locator('.cell').nth(1)).toHaveAccessibleName('Attribute B in unnamed table')
@@ -143,7 +196,7 @@ test('add fields to an existing table, type attributes directly, and name the ta
 })
 
 test('the + cell adds attributes without the sidebar', async ({ page }) => {
-  await pasteList(page, 'X')
+  await pasteFields(page, 'X')
   await placeOnCanvas(page, ['X'])
   await canvas(page).click({ position: { x: 600, y: 400 } }) // clears selection, creates nothing
   await expect(page.locator('.relation')).toHaveCount(1)
@@ -155,7 +208,7 @@ test('the + cell adds attributes without the sidebar', async ({ page }) => {
 })
 
 test('select and deselect an attribute with plain clicks', async ({ page }) => {
-  await pasteList(page, 'P\nQ')
+  await pasteFields(page, 'P\nQ')
   await placeOnCanvas(page, ['P', 'Q'])
   await cell(page, 'Q').click()
   await expect(cell(page, 'Q')).toHaveAttribute('aria-pressed', 'true')
@@ -165,7 +218,7 @@ test('select and deselect an attribute with plain clicks', async ({ page }) => {
 })
 
 test('move a table by clicks, by keyboard, and by dragging its header', async ({ page }) => {
-  await pasteList(page, 'M')
+  await pasteFields(page, 'M')
   await placeOnCanvas(page, ['M'], { x: 100, y: 100 })
   const box = async () => (await cell(page, 'M').boundingBox())!
 
@@ -196,23 +249,23 @@ test('move a table by clicks, by keyboard, and by dragging its header', async ({
 })
 
 test('Escape, or the pressed button, ends an operation without changing the document', async ({ page }) => {
-  await pasteList(page, 'E')
+  await pasteFields(page, 'E')
   await field(page, 'E').click()
-  await page.getByRole('button', { name: 'Place in diagram' }).click()
+  await fieldTool(page, 'Place in diagram').click()
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('button', { name: 'Place in diagram' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(fieldTool(page, 'Place in diagram')).toHaveAttribute('aria-pressed', 'false')
   await canvas(page).click({ position: { x: 200, y: 200 } })
   await expect(page.locator('.relation')).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Place in diagram' }).click()
-  await page.getByRole('button', { name: 'Placing…' }).click() // pressing it again cancels
+  await fieldTool(page, 'Place in diagram').click()
+  await fieldTool(page, 'Place in diagram').click() // pressing it again cancels
   await canvas(page).click({ position: { x: 200, y: 200 } })
   await expect(page.locator('.relation')).toHaveCount(0)
   await expect(field(page, 'E')).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('typing in a name field does not trigger shortcuts', async ({ page }) => {
-  await pasteList(page, 'K')
+  await pasteFields(page, 'K')
   await placeOnCanvas(page, ['K'])
   const before = (await cell(page, 'K').boundingBox())!
   await page.getByRole('button', { name: 'Name table' }).click()
@@ -232,7 +285,7 @@ test('typing in a name field does not trigger shortcuts', async ({ page }) => {
 })
 
 test('delete a table and restore it with undo', async ({ page }) => {
-  await pasteList(page, 'D')
+  await pasteFields(page, 'D')
   await placeOnCanvas(page, ['D'])
   const before = (await cell(page, 'D').boundingBox())!
   await page.getByRole('button', { name: 'Delete table' }).click()
@@ -244,7 +297,7 @@ test('delete a table and restore it with undo', async ({ page }) => {
 })
 
 test('a reload of the same tab restores the session', async ({ page }) => {
-  await pasteList(page, 'R1\nR2\nR3')
+  await pasteFields(page, 'R1\nR2\nR3')
   await placeOnCanvas(page, ['R1', 'R3'])
   await page.getByRole('button', { name: 'Name table' }).click()
   await page.getByLabel('Table name (leave empty for an unnamed table)').fill('Herstel')
@@ -264,7 +317,7 @@ test('corrupt session data starts an empty diagram instead of crashing', async (
   await page.evaluate(() => sessionStorage.setItem('krijt:v1:session', '{"version":1,"doc":{"format":"krijt","version":1,"relations":"x"}}'))
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Krijt' })).toBeVisible()
-  await expect(page.getByText('Type the fields of the original form')).toBeVisible()
+  await expect(page.getByLabel('New field')).toBeVisible()
 })
 
 test('help opens and closes', async ({ page }) => {

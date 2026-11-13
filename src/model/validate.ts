@@ -20,7 +20,8 @@ const isCoord = (v: unknown): v is number => typeof v === 'number' && Number.isF
 
 function parseSourceField(v: unknown): SourceField | null {
   if (!isObj(v) || !isId(v.id) || !isText(v.label)) return null
-  return { id: v.id, label: v.label }
+  if (v.ticked !== undefined && typeof v.ticked !== 'boolean') return null
+  return v.ticked ? { id: v.id, label: v.label, ticked: true } : { id: v.id, label: v.label }
 }
 
 function parseAttribute(v: unknown): Attribute | null {

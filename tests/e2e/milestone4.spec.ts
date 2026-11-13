@@ -210,7 +210,7 @@ test('corrupt recovery data starts an empty diagram with a notice, without crash
   await openWithRaw(page, '{"version":1,"doc":{"format":"krijt","relations":[{')
   await expect(alert(page)).toHaveText(/could not be restored/)
   await expect(relations(page)).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Paste a list of fields' })).toBeVisible()
+  await expect(page.getByLabel('New field')).toBeVisible()
 })
 
 test('a change right before a reload is not lost', async ({ page }) => {
@@ -269,12 +269,14 @@ test('a realistic exam diagram (25 fields, 10 tables, 12 references) stays respo
 
 test('names accept letters of any script, dashes and underscores; typing a space gives an underscore', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Paste a list of fields' }).click()
-  await page.getByLabel('One field per line').fill('Datum (dd-mm)\nΑριθμός πελάτη')
-  await page.getByRole('button', { name: /^Add \d+ fields$/ }).click()
+  await page.getByLabel('New field').evaluate((el, t) => {
+    const data = new DataTransfer()
+    data.setData('text/plain', t + '\n')
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+  }, 'Datum (dd-mm)\nΑριθμός πελάτη')
   const list = page.getByRole('list', { name: 'Form fields' })
   await list.getByRole('button', { name: 'Datum (dd-mm)', exact: true }).click()
-  await list.getByRole('button', { name: 'Αριθμός πελάτη', exact: true }).click()
+  await list.getByRole('button', { name: 'Αριθμός πελάτη', exact: true }).click({ modifiers: ['Shift'] })
   await page.getByRole('button', { name: 'Place in diagram' }).click()
   await canvas(page).click({ position: { x: 60, y: 80 } })
   // Labels with spaces and punctuation become valid names; the form fields keep their text.

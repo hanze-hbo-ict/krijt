@@ -158,7 +158,7 @@ describe('selection state', () => {
     expect(s.ui.selection.kind).toBe('none')
     let t = withFields(['a'])
     t = run(t, { type: 'toggleField', fieldId: t.doc.sourceFields[0]!.id })
-    t = run(t, { type: 'command', command: { type: 'deleteSourceField', fieldId: t.doc.sourceFields[0]!.id } })
+    t = run(t, { type: 'command', command: { type: 'deleteSourceFields', fieldIds: [t.doc.sourceFields[0]!.id] } })
     expect(t.ui.selectedFieldIds).toEqual([])
   })
 
@@ -183,9 +183,63 @@ describe('move table by clicks', () => {
   })
 })
 
-describe('sidebar width', () => {
-  it('is clamped', () => {
-    expect(run(initialState(), { type: 'ui', patch: { sidebarWidth: 5000 } }).ui.sidebarWidth).toBe(480)
-    expect(run(initialState(), { type: 'ui', patch: { sidebarWidth: 10 } }).ui.sidebarWidth).toBe(200)
+describe('field selection', () => {
+  const withFields = () => {
+    const command = addSourceFields(['a', 'b', 'c'])!
+    return run(initialState(), { type: 'command', command })
+  }
+
+  it('a plain click selects only that field; toggling adds and removes', () => {
+    let s = withFields()
+    const [a, b, c] = s.doc.sourceFields.map((f) => f.id)
+    s = run(s, { type: 'selectField', fieldId: a! }, { type: 'selectField', fieldId: b! })
+    expect(s.ui.selectedFieldIds).toEqual([b])
+    s = run(s, { type: 'selectField', fieldId: b! })
+    expect(s.ui.selectedFieldIds).toEqual([b])
+    s = run(s, { type: 'toggleField', fieldId: c! }, { type: 'toggleField', fieldId: a! })
+    expect(s.ui.selectedFieldIds).toEqual([b, c, a])
+    s = run(s, { type: 'toggleField', fieldId: c! })
+    expect(s.ui.selectedFieldIds).toEqual([b, a])
+  })
+
+  it('Add to selection switches off when no field is selected any more', () => {
+    let s = withFields()
+    const [a] = s.doc.sourceFields.map((f) => f.id)
+    s = run(s, { type: 'selectField', fieldId: a! }, { type: 'ui', patch: { multiSelectFields: true } })
+    expect(s.ui.multiSelectFields).toBe(true)
+    s = run(s, { type: 'toggleField', fieldId: a! })
+    expect(s.ui.multiSelectFields).toBe(false)
+    expect(run(withFields(), { type: 'ui', patch: { multiSelectFields: true } }).ui.multiSelectFields).toBe(false)
+  })
+
+  it('fields and diagram items are never selected together; the newer selection wins', () => {
+    let s = withFields()
+    const [a, b] = s.doc.sourceFields.map((f) => f.id)
+    s = run(s, { type: 'selectField', fieldId: a! }, { type: 'startPlace' })
+    s = click(s, EMPTY, { x: 100, y: 100 })
+    const table = { kind: 'relation' as const, relationId: s.doc.relations[0]!.id }
+    expect(s.ui.selection).toEqual(table)
+
+    // Selecting a field drops the table selection, and selecting the table drops the fields.
+    s = run(s, { type: 'selectField', fieldId: b! }, { type: 'ui', patch: { multiSelectFields: true } })
+    expect(s.ui.selection).toEqual({ kind: 'none' })
+    s = run(s, { type: 'ui', patch: { selection: table } })
+    expect(s.ui.selectedFieldIds).toEqual([])
+    expect(s.ui.multiSelectFields).toBe(false)
+
+    // While placing, the fields stay selected.
+    s = run(s, { type: 'selectField', fieldId: b! }, { type: 'startPlace' }, { type: 'ui', patch: { selection: table } })
+    expect(s.ui.selectedFieldIds).toEqual([b])
+  })
+
+  it('deleting selected fields drops them from the selection, and undo brings them back', () => {
+    let s = withFields()
+    const [a, b] = s.doc.sourceFields.map((f) => f.id)
+    s = run(s, { type: 'selectField', fieldId: a! }, { type: 'toggleField', fieldId: b! })
+    s = run(s, { type: 'command', command: { type: 'deleteSourceFields', fieldIds: [a!, b!] } })
+    expect(s.doc.sourceFields.map((f) => f.label)).toEqual(['c'])
+    expect(s.ui.selectedFieldIds).toEqual([])
+    s = run(s, { type: 'undo' })
+    expect(s.doc.sourceFields.map((f) => f.label)).toEqual(['a', 'b', 'c'])
   })
 })

@@ -30,11 +30,13 @@ async function tables(page: Page): Promise<string[][]> {
 
 async function setup(page: Page, names: string[]) {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Paste a list of fields' }).click()
-  await page.getByLabel('One field per line').fill(names.join('\n'))
-  await page.getByRole('button', { name: /^Add \d+ fields$/ }).click()
-  for (const n of names) await field(page, n).click()
-  await page.getByRole('button', { name: 'Place in diagram' }).click()
+  await page.getByLabel('New field').evaluate((el, t) => {
+    const data = new DataTransfer()
+    data.setData('text/plain', t + '\n')
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+  }, names.join('\n'))
+  for (const n of names) await field(page, n).click({ modifiers: ['Shift'] })
+  await page.getByRole('toolbar', { name: 'Field actions' }).getByRole('button', { name: 'Place in diagram' }).click()
   await canvas(page).click({ position: { x: 60, y: 80 } })
   await clickEmpty(page) // clear the selection
 }
@@ -214,7 +216,7 @@ test('Ctrl/Cmd+Z inside a text field stays native and does not undo the diagram'
 
 test('drag shortcuts: a form field onto a table copies it; an attribute onto empty canvas moves it', async ({ page }) => {
   await setup(page, ['a', 'b', 'c'])
-  await expect(page.getByText('No fields selected')).toBeVisible()
+  await expect(page.getByRole('toolbar', { name: 'Field actions' })).toHaveCount(0)
 
   // Field → table (onto the right half of "a": inserted after it).
   const src = (await field(page, 'c').boundingBox())!

@@ -44,14 +44,14 @@ describe('session recovery', () => {
   it('round-trips document and layout state', () => {
     const storage = new MemoryStorage()
     const doc = sampleDoc()
-    const ui = { viewport: { x: 12, y: -4, zoom: 1.5 }, sidebarWidth: 320 }
+    const ui = { viewport: { x: 12, y: -4, zoom: 1.5 }, sidebarCollapsed: true }
     expect(saveSession(storage, { doc, ui })).toBe(true)
     expect(loadSession(storage)).toEqual({ doc, ui })
   })
 
   it('returns null for missing, corrupt or incompatible data, without throwing', () => {
     const doc = sampleDoc()
-    const good = JSON.parse(serializeSession({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarWidth: 280 } }))
+    const good = JSON.parse(serializeSession({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false } }))
     const cases: (string | null)[] = [
       null,
       '',
@@ -83,15 +83,28 @@ describe('session recovery', () => {
 
   it('falls back to defaults for odd UI values but keeps the document', () => {
     const doc = sampleDoc()
-    const raw = JSON.stringify({ version: 1, doc, ui: { viewport: { x: 0, y: 0, zoom: 99 }, sidebarWidth: 9999 } })
-    expect(parseSession(raw)).toEqual({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarWidth: 480 } })
+    const raw = JSON.stringify({ version: 1, doc, ui: { viewport: { x: 0, y: 0, zoom: 99 }, sidebarCollapsed: 'yes' } })
+    expect(parseSession(raw)).toEqual({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false } })
+    // Sessions from before the collapse button stored a width instead: that is ignored.
+    const old = JSON.stringify({ version: 1, doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarWidth: 320 } })
+    expect(parseSession(old)).toEqual({ doc, ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false } })
+  })
+
+  it('keeps ticks, and rejects a tick that is not a boolean', () => {
+    const doc = sampleDoc()
+    const ticked = { ...doc, sourceFields: doc.sourceFields.map((f, i) => (i === 0 ? { ...f, ticked: true as const } : f)) }
+    expect(parseDocument(JSON.parse(JSON.stringify(ticked)))).toEqual(ticked)
+    const unticked = { ...doc, sourceFields: doc.sourceFields.map((f) => ({ ...f, ticked: false })) }
+    expect(parseDocument(JSON.parse(JSON.stringify(unticked)))).toEqual(doc)
+    const bad = { ...doc, sourceFields: doc.sourceFields.map((f) => ({ ...f, ticked: 'yes' })) }
+    expect(parseDocument(JSON.parse(JSON.stringify(bad)))).toBeNull()
   })
 
   it('reports failed writes instead of throwing', () => {
     const storage = new MemoryStorage()
     storage.failWrites = true
-    expect(saveSession(storage, { doc: emptyDocument(), ui: { viewport: DEFAULT_VIEWPORT, sidebarWidth: 280 } })).toBe(false)
-    expect(saveSession(null, { doc: emptyDocument(), ui: { viewport: DEFAULT_VIEWPORT, sidebarWidth: 280 } })).toBe(false)
+    expect(saveSession(storage, { doc: emptyDocument(), ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false } })).toBe(false)
+    expect(saveSession(null, { doc: emptyDocument(), ui: { viewport: DEFAULT_VIEWPORT, sidebarCollapsed: false } })).toBe(false)
     expect(storage.getItem(SESSION_KEY)).toBeNull()
   })
 })

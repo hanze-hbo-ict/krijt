@@ -24,6 +24,8 @@ const PATHS: Record<string, string[]> = {
   reference: ['M4 6h6v4H4z', 'M14 14h6v4h-6z', 'M7 10v6h4.5', 'm10 13.5 2.5 2.5-2.5 2.5'],
   back: ['M15 6l-6 6 6 6'],
   image: ['M4 5h16v14H4z', 'm4 16 5-5 4 4 2-2 5 5', 'M15.5 9.5h.01'],
+  /** A panel with its side bar (show or hide the form fields, as in Krash). */
+  sidebar: ['M4 5h16v14H4z', 'M9 5v14'],
   /** A cross in a circle, as in a search field's clear button (Clear diagram). */
   clear: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'm9 9 6 6M15 9l-6 6'],
 }

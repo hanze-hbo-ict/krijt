@@ -56,12 +56,18 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
 
         <h3>Form fields</h3>
         <ul>
-          <li>Type a field and press <kbd>Enter</kbd>, or paste a list with one field per line.</li>
-          <li>Click fields to select them (click again to deselect). No modifier keys are needed.</li>
           <li>
-            <strong>Place in diagram</strong>, then click a table, a cell edge, or empty canvas for a new table. You can also drag fields onto
-            the canvas. The form-field list itself never changes.
+            Type a field in the last row and press <kbd>Enter</kbd>. Pasting a list there adds one field per line.
           </li>
+          <li>
+            Click a field to select it. <strong>Add to selection</strong> in the toolbar (or <kbd>Shift</kbd>-click) adds or removes more.
+          </li>
+          <li>
+            The toolbar next to the selection has <strong>Place in diagram</strong> (then click a table, a cell edge, or empty canvas for a new
+            table), <strong>Tick</strong> (a checkmark for your own use), <strong>Rename</strong> and <strong>Delete</strong>. You can also
+            drag fields onto the canvas. Placing never changes the form-field list.
+          </li>
+          <li>The buttons in the header copy the list (one field per line) and hide or show it.</li>
         </ul>
         <h3>Attributes</h3>
         <ul>

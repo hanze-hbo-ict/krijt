@@ -5,13 +5,13 @@
  */
 import type { KrijtDocument } from '../model/types'
 import { parseDocument } from '../model/validate'
-import { clampSidebar, type UiState } from '../state/appState'
+import type { UiState } from '../state/appState'
 import { DEFAULT_VIEWPORT, MAX_ZOOM, MIN_ZOOM, type Viewport } from '../geometry/viewport'
 
 export const SESSION_KEY = 'krijt:v1:session'
 export const SAVE_DEBOUNCE_MS = 300
 
-export type SessionData = { doc: KrijtDocument; ui: Pick<UiState, 'viewport' | 'sidebarWidth'> }
+export type SessionData = { doc: KrijtDocument; ui: Pick<UiState, 'viewport' | 'sidebarCollapsed'> }
 
 export function safeSessionStorage(): Storage | null {
   try {
@@ -27,7 +27,7 @@ export function safeSessionStorage(): Storage | null {
 }
 
 export function serializeSession(data: SessionData): string {
-  return JSON.stringify({ version: 1, doc: data.doc, ui: { viewport: data.ui.viewport, sidebarWidth: data.ui.sidebarWidth } })
+  return JSON.stringify({ version: 1, doc: data.doc, ui: { viewport: data.ui.viewport, sidebarCollapsed: data.ui.sidebarCollapsed } })
 }
 
 function parseViewport(v: unknown): Viewport {
@@ -53,10 +53,9 @@ export function parseSession(raw: string | null): SessionData | null {
   const doc = parseDocument(obj.doc)
   if (!doc) return null
   const ui = typeof obj.ui === 'object' && obj.ui !== null ? (obj.ui as Record<string, unknown>) : {}
-  const sidebarWidth = typeof ui.sidebarWidth === 'number' && Number.isFinite(ui.sidebarWidth) ? clampSidebar(ui.sidebarWidth) : undefined
   return {
     doc,
-    ui: { viewport: parseViewport(ui.viewport), sidebarWidth: sidebarWidth ?? clampSidebar(280) },
+    ui: { viewport: parseViewport(ui.viewport), sidebarCollapsed: ui.sidebarCollapsed === true },
   }
 }
 

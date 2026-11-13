@@ -41,13 +41,29 @@ describe('source fields', () => {
     const [a, b] = doc.sourceFields
     doc = apply(doc, { type: 'renameSourceField', fieldId: a!.id, label: '  A1 ' })
     expect(doc.sourceFields[0]).toEqual({ id: a!.id, label: 'A1' })
-    doc = apply(doc, { type: 'deleteSourceField', fieldId: b!.id })
+    doc = apply(doc, { type: 'deleteSourceFields', fieldIds: [b!.id] })
     expect(doc.sourceFields).toEqual([{ id: a!.id, label: 'A1' }])
   })
   it('rejects a blank rename and unknown fields', () => {
     const doc = withFields(['a'])
     expect(applyCommand(doc, { type: 'renameSourceField', fieldId: doc.sourceFields[0]!.id, label: '  ' }).ok).toBe(false)
-    expect(applyCommand(doc, { type: 'deleteSourceField', fieldId: 'nope' }).ok).toBe(false)
+    expect(applyCommand(doc, { type: 'deleteSourceFields', fieldIds: ['nope'] }).ok).toBe(false)
+    expect(applyCommand(doc, { type: 'setSourceFieldsTicked', fieldIds: ['nope'], value: true }).ok).toBe(false)
+  })
+  it('deletes several fields at once', () => {
+    let doc = withFields(['a', 'b', 'c'])
+    const [a, , c] = doc.sourceFields
+    doc = apply(doc, { type: 'deleteSourceFields', fieldIds: [c!.id, a!.id] })
+    expect(doc.sourceFields.map((f) => f.label)).toEqual(['b'])
+  })
+  it('ticks and unticks fields; an unticked field carries no flag', () => {
+    let doc = withFields(['a', 'b'])
+    const [a, b] = doc.sourceFields
+    doc = apply(doc, { type: 'setSourceFieldsTicked', fieldIds: [a!.id, b!.id], value: true })
+    expect(doc.sourceFields.map((f) => f.ticked)).toEqual([true, true])
+    doc = apply(doc, { type: 'setSourceFieldsTicked', fieldIds: [a!.id], value: false })
+    expect(doc.sourceFields[0]).toEqual({ id: a!.id, label: 'a' })
+    expect(doc.sourceFields[1]).toEqual({ id: b!.id, label: 'b', ticked: true })
   })
   it('rejects reused IDs', () => {
     const doc = withFields(['a'])
@@ -86,7 +102,7 @@ describe('placing fields into tables', () => {
     doc = apply(doc, createRelationFromNames(['Naam'], { x: 0, y: 0 }))
     const f = doc.sourceFields[0]!
     doc = apply(doc, { type: 'renameSourceField', fieldId: f.id, label: 'Achternaam' })
-    doc = apply(doc, { type: 'deleteSourceField', fieldId: f.id })
+    doc = apply(doc, { type: 'deleteSourceFields', fieldIds: [f.id] })
     expect(doc.relations[0]!.attributes[0]!.name).toBe('Naam')
   })
 

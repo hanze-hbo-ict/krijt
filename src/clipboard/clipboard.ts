@@ -96,11 +96,12 @@ export async function copyText(env: ClipboardEnv, text: string): Promise<CopyRes
 export const COPY_MESSAGES = {
   imageCopied: 'Image copied. Paste it into your answer, and check that it arrived.',
   dataCopied: 'Diagram data copied as text.',
+  fieldsCopied: 'Form fields copied, one per line.',
   empty: 'There is nothing to copy yet: the diagram has no tables.',
   tooLarge: 'The diagram is too large to copy as one image. Move the tables closer together and try again.',
 } as const
 
-export function failureMessage(kind: 'image' | 'data', reason: CopyFailure, detail?: string): string {
+export function failureMessage(kind: 'image' | 'data' | 'fields', reason: CopyFailure, detail?: string): string {
   switch (reason) {
     case 'insecure':
       return 'Copying needs a secure (https) page. Open Krijt over https and try again.'
@@ -109,7 +110,9 @@ export function failureMessage(kind: 'image' | 'data', reason: CopyFailure, deta
         ? 'This browser cannot put images on the clipboard. Try another browser, or use Copy as text if text answers are allowed.'
         : 'This browser cannot put text on the clipboard.'
     case 'blocked':
-      return `The browser blocked the clipboard. Allow clipboard access for this page, then click Copy as ${kind === 'image' ? 'image' : 'text'} again.`
+      return `The browser blocked the clipboard. Allow clipboard access for this page, then click ${
+        kind === 'image' ? 'Copy as image' : kind === 'data' ? 'Copy as text' : 'Copy form fields'
+      } again.`
     case 'failed':
       return `Copying failed${detail ? ` (${detail})` : ''}. Nothing was copied; try again.`
   }

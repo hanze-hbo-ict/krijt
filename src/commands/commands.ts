@@ -21,7 +21,9 @@ export type Destination = { kind: 'table'; relationId: Id; index?: number } | { 
 export type Command =
   | { type: 'addSourceFields'; fields: SourceField[]; index?: number }
   | { type: 'renameSourceField'; fieldId: Id; label: string }
-  | { type: 'deleteSourceField'; fieldId: Id }
+  | { type: 'deleteSourceFields'; fieldIds: Id[] }
+  /** Tick or untick fields: a marker for the student only, nothing else depends on it. */
+  | { type: 'setSourceFieldsTicked'; fieldIds: Id[]; value: boolean }
   | { type: 'createRelation'; relation: Relation }
   | { type: 'addAttributes'; relationId: Id; attributes: Attribute[]; index?: number }
   | { type: 'renameRelation'; relationId: Id; name: string | null }
@@ -285,9 +287,21 @@ export function applyCommand(doc: KrijtDocument, cmd: Command): CommandResult {
       if (label === '') return fail('A field needs a name.')
       return ok({ ...doc, sourceFields: doc.sourceFields.map((f) => (f.id === cmd.fieldId ? { ...f, label } : f)) })
     }
-    case 'deleteSourceField': {
-      if (!doc.sourceFields.some((f) => f.id === cmd.fieldId)) return fail('That field no longer exists.')
-      return ok({ ...doc, sourceFields: doc.sourceFields.filter((f) => f.id !== cmd.fieldId) })
+    case 'deleteSourceFields': {
+      const ids = new Set(cmd.fieldIds)
+      const sourceFields = doc.sourceFields.filter((f) => !ids.has(f.id))
+      if (sourceFields.length === doc.sourceFields.length) return fail('Those fields no longer exist.')
+      return ok({ ...doc, sourceFields })
+    }
+    case 'setSourceFieldsTicked': {
+      const ids = new Set(cmd.fieldIds)
+      if (!doc.sourceFields.some((f) => ids.has(f.id))) return fail('Those fields no longer exist.')
+      // Unticked fields carry no flag, so the stored document stays as it was before ticks existed.
+      const sourceFields = doc.sourceFields.map((f) => {
+        if (!ids.has(f.id) || !!f.ticked === cmd.value) return f
+        return cmd.value ? { ...f, ticked: true as const } : { id: f.id, label: f.label }
+      })
+      return ok({ ...doc, sourceFields })
     }
     case 'createRelation': {
       const r = cmd.relation

@@ -93,7 +93,7 @@ export function SelectionToolbar({ state, dispatch, anchor, bounds }: Props) {
 
 type ActionProps = Omit<Props, 'anchor' | 'bounds'>
 
-function ToolButton({
+export function ToolButton({
   label,
   tooltip,
   onClick,
@@ -128,7 +128,7 @@ function ToolButton({
   )
 }
 
-const Separator = () => <span className="toolbar-separator" aria-hidden="true" />
+export const Separator = () => <span className="toolbar-separator" aria-hidden="true" />
 
 /**
  * The flags are shown in the diagram's own notation, so the button looks like what it does. The "a" is centred in

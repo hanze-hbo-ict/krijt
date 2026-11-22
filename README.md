@@ -33,6 +33,14 @@ First-time E2E setup: `npx playwright install chromium firefox webkit`. Run agai
 get a preview URL. The pipeline runs the unit tests, the production build and the Chromium E2E tests before deploying.
 `public/_headers` gives the deployed site the same CSP and security headers as `npm run preview`.
 
+`/diagnostics/` is a static diagnostics page for environments where Krijt does not work, for example an exam shell.
+Someone opens it there, presses **Run all variants** and sends back the JSON report. It measures the browser, the
+headers as received, workers, `SharedArrayBuffer`, WebAssembly and service workers, under Krijt's own headers and with
+comparison headers set by the `/diagnostics/*` rules in `public/_headers`. Krijt's CSP does not allow WebAssembly, so
+those checks fail on purpose and the report lists the CSP violation. The page was copied from
+[Klode](https://github.com/hanze-hbo-ict/klode) and now belongs to Krijt; see `public/diagnostics/README.md`.
+`npm run preview` sends Krijt's headers on every path, so the comparison pages only differ on Cloudflare Pages.
+
 One-time setup:
 
 1. Create the Pages project: `npx wrangler login`, then `npx wrangler pages project create krijt --production-branch main`.
